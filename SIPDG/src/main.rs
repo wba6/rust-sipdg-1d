@@ -2,7 +2,7 @@ fn main() {
     println!("Hello, world!");
 
 
-    println!("Begin SPIMG Process");
+    println!("Begin SIPDG Process");
 
     // Problem: -(p(x)u')' + q(x)u = f(x) on [0,1]
     // Note these could have to be lambdas in the future
