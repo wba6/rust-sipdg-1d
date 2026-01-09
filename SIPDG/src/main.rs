@@ -13,4 +13,10 @@ fn main() {
     
     println!("Our function looks like -({}u')' + {}u = {}", p_coeff, q_coeff, f_coeff);
 
+
+    // Penalty parameter for stability
+    let penalty_param: u32 = 10;
+
+    // ------------------- Generate Mesh --------------------
+
 }
