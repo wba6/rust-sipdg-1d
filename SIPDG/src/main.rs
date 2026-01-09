@@ -9,7 +9,7 @@ fn main() {
     let p_fun: u32 = 1;
     let q_fun: u32 = 0;
     let f_fun: u32 = 1;
-    let soln_function = |x:f64| (x*((1 as f64)-x))/2 as f64;
+    let soln_function = |x: f64| (x * (1.0 - x)) / 2.0;
     
     println!("Our function looks like -({}u')' + {}u = {}", p_fun, q_fun, f_fun);
 
