@@ -23,7 +23,7 @@ fn main() {
 
     // Domain to find soln for
     let domain_a: f64 = 0 as f64; 
-    let domain_b: f64 = 1 as f64;
+    let domain_b: f64 = 1.0;
 
     // number of elements
     let num_elements: usize = 20;
