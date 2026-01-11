@@ -34,7 +34,7 @@ fn main() {
 
     // With DG we do not share nodes 
     let n_dof: usize = 2 * num_elements;
-    let mut x_dof: Vec<f64> = vec![0 as f64; n_dof];
+    let mut x_dof: Vec<f64> = vec![0.0; n_dof];
     let mut h_elem: Vec<f64> = vec![0 as f64; num_elements];
 
     // Fill node coordinates and element sizes
