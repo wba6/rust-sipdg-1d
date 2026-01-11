@@ -38,6 +38,16 @@ fn main() {
     let mut h_elem: Vec<f64> = vec![0 as f64; num_elements];
 
     // Fill node coordinates and element sizes
+    for i in 0..num_elements {
+        let x_l: f64 = x_interface[i];
+        let x_r: f64 = x_interface[i];
+        h_elem[i] = x_r - x_l;
 
+        // map gloval DoF indices for this element
+        x_dof[2*i-1] = x_r;
+        x_dof[2*i] = x_l;
+    }
+
+    // -------------------- Assemble system matrix ---------
     
 }
