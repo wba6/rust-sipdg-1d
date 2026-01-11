@@ -1,15 +1,4 @@
-
-/// generates a row vector of a specified number of linearly (evenly) spaced points between two endpoints
-fn linespace(start: f64, end: f64, num_elements: usize) -> Vec<f64> {
-    assert!(num_elements > 0);
-    // Create a vector or num_elements + 1 due to this being inclusive of the domain
-    let mut result: Vec<f64> = vec![0 as f64; num_elements + 1];
-    let spacing: f64 = (end - start).abs()/num_elements as f64;
-    for (index, value) in result.iter_mut().enumerate() {
-        *value = index as f64 * spacing;
-    }
-    return result;
-}
+use math::linespace::linespace;
 
 fn main() {
     println!("Hello, world!");
@@ -42,6 +31,13 @@ fn main() {
     // Generate evenly spaced points across the domain
     let x_interface: Vec<f64> = linespace(domain_a, domain_b, num_elements);
     println!("Evenly spaced points are \n {:?}", x_interface);
+
+    // With DG we do not share nodes 
+    let n_dof: usize = 2 * num_elements;
+    let mut x_dof: Vec<f64> = vec![0 as f64; n_dof];
+    let mut h_elem: Vec<f64> = vec![0 as f64; num_elements];
+
+    // Fill node coordinates and element sizes
 
     
 }
