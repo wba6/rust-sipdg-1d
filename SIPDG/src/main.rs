@@ -40,7 +40,7 @@ fn main() {
     // Fill node coordinates and element sizes
     for i in 0..num_elements {
         let x_l: f64 = x_interface[i];
-        let x_r: f64 = x_interface[i];
+        let x_r: f64 = x_interface[i + 1];
         h_elem[i] = x_r - x_l;
 
         // map global DoF indices for this element
