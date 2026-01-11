@@ -43,7 +43,7 @@ fn main() {
         let x_r: f64 = x_interface[i];
         h_elem[i] = x_r - x_l;
 
-        // map gloval DoF indices for this element
+        // map global DoF indices for this element
         x_dof[2*i-1] = x_r;
         x_dof[2*i] = x_l;
     }
