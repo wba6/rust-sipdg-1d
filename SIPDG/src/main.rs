@@ -44,8 +44,8 @@ fn main() {
         h_elem[i] = x_r - x_l;
 
         // map global DoF indices for this element
-        x_dof[2*i-1] = x_r;
-        x_dof[2*i] = x_l;
+        x_dof[2*i-1] = x_l;
+        x_dof[2*i] = x_r;
     }
 
     // -------------------- Assemble system matrix ---------
