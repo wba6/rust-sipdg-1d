@@ -1,5 +1,46 @@
 
-/// generates a row vector of a specified number of linearly (evenly) spaced points between two endpoints
+/// Generates a vector of `num_elements` linearly (evenly) spaced points between two endpoints.
+///
+/// # Arguments
+///
+/// * `start` - The starting value of the sequence (first element of the returned vector).
+/// * `end` - The ending value of the sequence (last element of the returned vector).
+/// * `num_elements` - The total number of points to generate. Must be greater than 0.
+///
+/// # Returns
+///
+/// A `Vec<f64>` containing `num_elements` points linearly spaced from `start` to `end`,
+/// inclusive. The first element is exactly `start`, and the last element is forced to be
+/// exactly `end` to avoid floating-point accumulation error.
+///
+/// # Edge cases
+///
+/// * If `num_elements == 1`, the function returns a single-element vector containing only
+///   `start`. In this case, `end` is ignored.
+/// * If `start > end`, the function still produces linearly spaced values, but the step
+///   between elements is negative.
+///
+/// # Panics
+///
+/// Panics if `num_elements == 0`.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// # use math::linespace;
+/// let xs = linespace(0.0, 1.0, 5);
+/// assert_eq!(xs, vec![0.0, 0.25, 0.5, 0.75, 1.0]);
+/// ```
+///
+/// Reverse range:
+///
+/// ```
+/// # use math::linespace;
+/// let xs = linespace(5.0, 1.0, 5);
+/// assert_eq!(xs, vec![5.0, 4.0, 3.0, 2.0, 1.0]);
+/// ```
 pub fn linespace(start: f64, end: f64, num_elements: usize) -> Vec<f64> {
     assert!(num_elements > 0, "num_elements must be greater than 0");
 
