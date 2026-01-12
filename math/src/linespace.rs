@@ -28,19 +28,19 @@
 ///
 /// Basic usage:
 ///
-/// ```
+/// 
 /// # use math::linespace;
 /// let xs = linespace(0.0, 1.0, 5);
 /// assert_eq!(xs, vec![0.0, 0.25, 0.5, 0.75, 1.0]);
-/// ```
+/// 
 ///
 /// Reverse range:
 ///
-/// ```
+///
 /// # use math::linespace;
 /// let xs = linespace(5.0, 1.0, 5);
 /// assert_eq!(xs, vec![5.0, 4.0, 3.0, 2.0, 1.0]);
-/// ```
+/// 
 pub fn linespace(start: f64, end: f64, num_elements: usize) -> Vec<f64> {
     assert!(num_elements > 0, "num_elements must be greater than 0");
 
