@@ -39,3 +39,16 @@ impl Mul<f64> for Matrix {
         result
     }
 }
+
+impl Mul<Matrix> for f64 {
+    type Output = Matrix;
+
+    fn mul(self, matrix: Matrix) -> Self::Output {
+        let mut result = Matrix::new(matrix.data.len(), matrix.data[0].len());
+        for (index, row) in matrix.data.iter().enumerate() {
+            result.data[index] = row.iter().map(|&x| x*self).collect();
+        }
+        result
+    }
+}
+
