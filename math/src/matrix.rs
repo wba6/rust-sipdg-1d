@@ -1,4 +1,4 @@
-use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut, Mul};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Matrix {
@@ -28,3 +28,14 @@ impl IndexMut<usize> for Matrix {
     }
 }
 
+impl Mul<f64> for Matrix {
+    type Output = Matrix;
+
+    fn mul(self, scalar: f64) -> Self::Output {
+        let mut result = Matrix::new(self.data.len(), self.data[0].len());
+        for (index, row) in self.data.iter().enumerate() {
+            result.data[index] = row.iter().map(|&x| x*scalar).collect();
+        }
+        result
+    }
+}
