@@ -110,9 +110,6 @@ fn main() {
         let h_avg = (h_elem[i] + h_elem[i+1]) / 2.0;
         let penalty = penalty_param as f64 * (p_val/h_avg);
 
-        let n_l = 1;
-        let n_r = -1;
-
         let grad_phi_l = 1.0/h_elem[i];
         let grad_phi_r = -1.0/h_elem[i+1];
 
