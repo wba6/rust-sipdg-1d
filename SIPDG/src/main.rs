@@ -49,14 +49,14 @@ fn main() {
     println!("x dof is \n {:?}", x_dof);
 
     // -------------------- Assemble system matrix ---------
-    let A:Matrix<f64> = Matrix::<f64>::new(n_dof, n_dof, 0.0);     
-    let F:Matrix<f64> = Matrix::<f64>::new(1, n_dof, 0.0);
+    let mut A:Matrix<f64> = Matrix::<f64>::new(n_dof, n_dof, 0.0);     
+    let mut F:Matrix<f64> = Matrix::<f64>::new(1, n_dof, 0.0);
 
     for i in 0..num_elements {
         // element parameters
         let h_k = h_elem[i];
         let idx = [2*i, 2*i+1];
-        let xc = (x_dof[idx[1]] + x_dof[idx[2]]) / 2.0;
+        let xc = (x_dof[idx[0]] + x_dof[idx[1]]) / 2.0;
 
 
         // Evaluate Coeffs at midpoint
@@ -68,10 +68,10 @@ fn main() {
         // dphi/dx = +/- 1/h. 
         // Local Stiffness Matrix (Int p u' v')
         // integral (-1/h)(-1/h) dx = 1/h^2 * h = 1/h 
-        let mut multiplicationMatrix = Matrix::<f64>::new(2, 2, 1.0);
+        let mut multiplicationMatrix = Matrix::<f64>::new(2, 2, -1.0);
         multiplicationMatrix[(0, 0)] = 1.0;
         multiplicationMatrix[(1, 1)] = 1.0;
-        let k_e: Matrix = (p_k / h_k) * &multiplicationMatrix;
+        let k_e: Matrix<f64> = &multiplicationMatrix * &(p_k / h_k) ;
 
         // Local Mass Matrix (Int q u v)
         // Standard linear mass matrix [2 1; 1 2] * h/6
@@ -79,21 +79,21 @@ fn main() {
         multiplicationMatrix[(0, 1)] = 1.0;
         multiplicationMatrix[(1, 0)] = 1.0;
         multiplicationMatrix[(1, 1)] = 2.0;
-        let m_e: Matrix<f64> = (q_k * h_k / 6.0) * &multiplicationMatrix;
+        let m_e: Matrix<f64> = &multiplicationMatrix * &(q_k * h_k / 6.0);
 
 
         // local load vector
-        let mut multiMatrix = Matrix::<f64>::new(1, 2, 1.0);
-        let f_e = (f_k * h_k / 2.0) * &multiMatrix;
+        let multiMatrix = Matrix::<f64>::new(1, 2, 1.0);
+        let f_e = &multiMatrix * &(f_k * h_k / 2.0);
 
         // assemble volume terms
         for a in 0..2 {
             let I = idx[a];
-            F[I] += f_e[a];
+            F[(0,I)] += f_e[(0,a)];
 
             for b in 0..2 {
                 let J = idx[b];
-                A[I][J] += k_e[a][b] + m_e[a][b];
+                A[(I, J)] += k_e[(a, b)] + m_e[(a, b)];
             }
         }
 
