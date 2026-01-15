@@ -16,7 +16,6 @@ fn main() {
     
     // Penalty parameter for stability
     let penalty_param: u32 = 10;
-    let sigma_0 = 10;
 
     // ------------------- Generate Mesh --------------------
 
@@ -109,7 +108,7 @@ fn main() {
         let p_val = p_func(x_val); 
 
         let h_avg = (h_elem[i] + h_elem[i+1]) / 2.0;
-        let penalty = sigma_0 as f64 * (p_val/h_avg);
+        let penalty = penalty_param as f64 * (p_val/h_avg);
 
         let n_l = 1;
         let n_r = -1;
@@ -158,7 +157,7 @@ fn main() {
         let p_val = p_func(x_dof[idx]);
 
         // Penalty term: sigma_0 * p / h
-        let pen = (sigma_0 as f64) * (p_val / h_bnd);
+        let pen = (penalty_param as f64) * (p_val / h_bnd);
         A[(idx, idx)] += pen;
 
         // Consistency + symmetry terms:
