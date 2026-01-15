@@ -83,8 +83,8 @@ fn main() {
 
 
         // local load vector
-        let multiMatrix = Matrix::<f64>::new(1, 2, 1.0);
-        let f_e = &multiMatrix * &(f_k * h_k / 2.0);
+        let multi_matrix = Matrix::<f64>::new(1, 2, 1.0);
+        let f_e = &multi_matrix * &(f_k * h_k / 2.0);
 
         // assemble volume terms
         for a in 0..2 {
