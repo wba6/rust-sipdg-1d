@@ -1,54 +1,99 @@
-use std::ops::{Index, IndexMut, Mul};
+use std::{ops::{Add, Index, IndexMut, Mul}, process::Output};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Matrix {
-    pub data: Vec<Vec<f64>>
+pub struct Matrix<T> {
+    rows: usize,
+    cols: usize,
+    data: Vec<T>
 }
 
-impl Matrix {
-    // Creates a new matrix initialized to zero
-    pub fn new(x_size: usize, y_size: usize) -> Self {
-       Matrix {
-           data: vec![vec![0.0; y_size]; x_size]
-       }
-    }
-}
-
-impl Index<usize> for Matrix {
-    type Output = Vec<f64>;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.data[index]
-    }
-}
-
-impl IndexMut<usize> for Matrix {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.data[index]
-    }
-}
-
-impl Mul<f64> for Matrix {
-    type Output = Matrix;
-
-    fn mul(self, scalar: f64) -> Self::Output {
-        let mut result = Matrix::new(self.data.len(), self.data[0].len());
-        for (index, row) in self.data.iter().enumerate() {
-            result.data[index] = row.iter().map(|&x| x*scalar).collect();
+impl<T> Matrix<T> {
+    // Creates a new matrix initialized to value 
+    pub fn new(rows: usize, cols: usize, value: T) -> Self
+    where 
+        T: Clone,
+    {
+        let len = rows * cols;
+        Self {
+            rows,
+            cols,
+            data: vec![value; len],
         }
+    }
+
+    pub fn from_vec(rows: usize, cols: usize, data: Vec<T>) -> Self 
+    where 
+        T: Clone,
+    {
+        assert_eq!(rows * cols, data.len(), "Vector is not the correct size (rows * cols)");
+        Self { rows, cols, data}
+    }
+
+    pub fn rows(&self) -> usize { self.rows }
+    pub fn cols(&self) -> usize { self.cols }
+    pub fn len(&self) -> usize { self.data.len() }
+    pub fn is_empty(&self) -> bool { self.data.is_empty() }
+
+    fn flat_index(&self, r: usize, c: usize) -> usize {
+        debug_assert!(r < self.rows && c < self.cols, "Index out of bounds");
+        r * self.cols + c
+    }
+
+    pub fn get(&self, r: usize, c: usize) -> Option<&T> {
+        if r < self.rows && c < self.cols {
+            Some(&self.data[r * self.cols + c])
+        } else {
+            None
+        }
+    }
+
+    pub fn get_mut(&mut self, r: usize, c: usize) -> Option<&mut T> {
+        if r < self.rows && c < self.cols {
+            let i = r * self.cols + c;
+            Some(&mut self.data[i])
+        } else {
+            None
+        }
+    }
+
+}
+
+impl Matrix<f64> {
+    /// Convenience: zero matrix for f64.
+    pub fn zeros(rows: usize, cols: usize) -> Self {
+        Self::new(rows, cols, 0.0)
+    }
+}
+
+impl<T> Index<(usize, usize)> for Matrix<T> {
+    type Output = T;
+
+    fn index(&self, (r, c): (usize, usize)) -> &Self::Output {
+        let i = self.flat_index(r, c);
+        &self.data[i]
+    }
+}
+
+impl<T> IndexMut<(usize, usize)> for Matrix<T> {
+    fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut Self::Output {
+        let i = self.flat_index(r, c);
+        &mut self.data[i]
+    }
+}
+
+impl<T> Mul<&T> for &Matrix<T>
+where
+    T: Clone + Default + Mul<Output = T>,
+{
+    type Output = Matrix<T>;
+
+    fn mul(self, scalar: &T) -> Self::Output {
+        let mut result = Matrix::<T>::new(self.rows, self.cols, T::default());
+
+        for i in 0..self.data.len() {
+            result.data[i] = self.data[i].clone() * scalar.clone();
+        }
+
         result
     }
 }
-
-impl Mul<Matrix> for f64 {
-    type Output = Matrix;
-
-    fn mul(self, matrix: Matrix) -> Self::Output {
-        let mut result = Matrix::new(matrix.data.len(), matrix.data[0].len());
-        for (index, row) in matrix.data.iter().enumerate() {
-            result.data[index] = row.iter().map(|&x| x*self).collect();
-        }
-        result
-    }
-}
-
