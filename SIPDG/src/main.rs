@@ -68,18 +68,18 @@ fn main() {
         // dphi/dx = +/- 1/h. 
         // Local Stiffness Matrix (Int p u' v')
         // integral (-1/h)(-1/h) dx = 1/h^2 * h = 1/h 
-        let mut multiplicationMatrix = Matrix::<f64>::new(2, 2, -1.0);
-        multiplicationMatrix[(0, 0)] = 1.0;
-        multiplicationMatrix[(1, 1)] = 1.0;
-        let k_e: Matrix<f64> = &multiplicationMatrix * &(p_k / h_k) ;
+        let mut multiplication_matrix = Matrix::<f64>::new(2, 2, -1.0);
+        multiplication_matrix[(0, 0)] = 1.0;
+        multiplication_matrix[(1, 1)] = 1.0;
+        let k_e: Matrix<f64> = &multiplication_matrix * &(p_k / h_k) ;
 
         // Local Mass Matrix (Int q u v)
         // Standard linear mass matrix [2 1; 1 2] * h/6
-        multiplicationMatrix[(0, 0)] = 2.0;
-        multiplicationMatrix[(0, 1)] = 1.0;
-        multiplicationMatrix[(1, 0)] = 1.0;
-        multiplicationMatrix[(1, 1)] = 2.0;
-        let m_e: Matrix<f64> = &multiplicationMatrix * &(q_k * h_k / 6.0);
+        multiplication_matrix[(0, 0)] = 2.0;
+        multiplication_matrix[(0, 1)] = 1.0;
+        multiplication_matrix[(1, 0)] = 1.0;
+        multiplication_matrix[(1, 1)] = 2.0;
+        let m_e: Matrix<f64> = &multiplication_matrix * &(q_k * h_k / 6.0);
 
 
         // local load vector
