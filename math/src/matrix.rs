@@ -1,4 +1,4 @@
-use std::{ops::{Add, Index, IndexMut, Mul}, process::Output};
+use std::ops::{Index, IndexMut, Mul};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Matrix<T> {
