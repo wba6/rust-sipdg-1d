@@ -16,6 +16,7 @@ fn main() {
     
     // Penalty parameter for stability
     let penalty_param: u32 = 10;
+    let sigma_0 = 10;
 
     // ------------------- Generate Mesh --------------------
 
@@ -99,4 +100,71 @@ fn main() {
 
     }
 
+    // interface integral
+    for i in 0..num_elements-1 {
+        let indx_l: usize = 2 * i;
+        let indx_r: usize = 2 * i + 1;
+        
+        let x_val = x_dof[indx_l];
+        let p_val = p_func(x_val); 
+
+        let h_avg = (h_elem[i] + h_elem[i+1]) / 2.0;
+        let penalty = sigma_0 as f64 * (p_val/h_avg);
+
+        let n_l = 1;
+        let n_r = -1;
+
+        let grad_phi_l = 1.0/h_elem[i];
+        let grad_phi_r = -1.0/h_elem[i+1];
+
+        A[(indx_l, indx_l)] = A[(indx_l, indx_l)] + penalty;
+        A[(indx_l, indx_r)] = A[(indx_l, indx_r)] - penalty;
+        A[(indx_r, indx_l)] = A[(indx_r, indx_l)] - penalty;
+        A[(indx_r, indx_r)] = A[(indx_r, indx_r)] + penalty;
+
+        A[(indx_l, indx_l)] = A[(indx_l, indx_l)] - 0.5 * p_val * (1.0/h_elem[i]);
+        A[(indx_l, indx_r)] = A[(indx_l, indx_r)] - 0.5 * p_val * (-1.0/h_elem[i+1]);
+
+        A[(indx_l, indx_l)] = A[(indx_l, indx_l)] - 0.5 * p_val * (1.0/h_elem[i]);
+        A[(indx_r, indx_l)] = A[(indx_r, indx_l)] + 0.5 * p_val * (1.0/h_elem[i]);
+
+        
+        A[(indx_r, indx_l)] = A[(indx_r, indx_l)] + 0.5 * p_val * (1.0/h_elem[i]);
+        A[(indx_r, indx_r)] = A[(indx_r, indx_r)] + 0.5 * p_val * (-1.0/h_elem[i+1]);
+
+        A[(indx_l, indx_r)] = A[(indx_l, indx_r)] - 0.5 * p_val * grad_phi_r + 0.5 * p_val * grad_phi_l; 
+        A[(indx_r, indx_l)] = A[(indx_r, indx_l)] + 0.5 * p_val * grad_phi_l - 0.5 * p_val * grad_phi_r; 
+
+    }
+
+    let bnd_nodes: [usize; 2] = [0, n_dof - 1];
+    let normals: [f64; 2] = [-1.0, 1.0];
+
+    for side in 0..2 {
+        let idx = bnd_nodes[side]; // global dof index
+        let n = normals[side];     // outward normal
+
+        // Pick boundary element size and basis gradient at the boundary node
+        let (h_bnd, grad_phi) = if side == 0 {
+            // Left boundary: first element, left node basis slope is -1/h
+            let h = h_elem[0];
+            (h, -1.0 / h)
+        } else {
+            // Right boundary: last element, right node basis slope is +1/h
+            let h = h_elem[num_elements - 1];
+            (h, 1.0 / h)
+        };
+
+        let p_val = p_func(x_dof[idx]);
+
+        // Penalty term: sigma_0 * p / h
+        let pen = (sigma_0 as f64) * (p_val / h_bnd);
+        A[(idx, idx)] += pen;
+
+        // Consistency + symmetry terms:
+        A[(idx, idx)] -= 2.0 * p_val * grad_phi * n;
+
+    }
+
+    // solve system
 }
