@@ -165,7 +165,56 @@ fn main() {
     }
 
     // solve system
-    let result = guass_pp(A, F);
+    let u = guass_pp(A, F);
 
+    let mut l2_err_sq: f64 = 0.0;
+    let npts: usize = 10;
+
+    for k in 0..num_elements {
+        let idx0 = 2 * k;
+        let idx1 = 2 * k + 1;
+
+        let x_l = x_dof[idx0];
+        let x_r = x_dof[idx1];
+        let h = h_elem[k];
+
+        let ul = u[idx0];
+        let ur = u[idx1];
+
+        let step = (x_r - x_l) / ((npts - 1) as f64);
+
+        // trapezoid integration on-the-fly
+        let mut prev_x = x_l;
+        let mut prev_err2 = {
+            let phi1 = (x_r - prev_x) / h;
+            let phi2 = (prev_x - x_l) / h;
+            let uh = ul * phi1 + ur * phi2;
+            let uex = soln_function(prev_x);
+            let e = uh - uex;
+            e * e
+        };
+
+        for i in 1..npts {
+            let x = x_l + step * (i as f64);
+
+            let phi1 = (x_r - x) / h;
+            let phi2 = (x - x_l) / h;
+
+            let uh = ul * phi1 + ur * phi2;
+            let uex = soln_function(x);
+            let e = uh - uex;
+            let err2 = e * e;
+
+            let dx = x - prev_x;
+            l2_err_sq += 0.5 * dx * (prev_err2 + err2);
+
+            prev_x = x;
+            prev_err2 = err2;
+        }
+    }
+
+    let l2_error = l2_err_sq.sqrt();
+    println!("Total DoFs: {}", n_dof);
+    println!("L2 Error: {:.6e}", l2_error);
 
 }
