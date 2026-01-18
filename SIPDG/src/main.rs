@@ -101,21 +101,19 @@ fn main() {
 
     // interface integral
     for i in 0..num_elements-1 {
-        let indx_l: usize = 2 * i;
-        let indx_r: usize = 2 * i + 1;
-        
-        let x_val = x_dof[indx_l];
-        let p_val = p_func(x_val); 
+        // interface is between R_i and L_{i+1}
+        let indx_l: usize = 2 * i + 1;     // right node of element i
+        let indx_r: usize = 2 * i + 2;     // left node of element i+1
 
-        let h_avg = (h_elem[i] + h_elem[i+1]) / 2.0;
-        let penalty = penalty_param as f64 * (p_val/h_avg);
+        let x_val = x_dof[indx_l];         // interface x
+        let p_val = p_func(x_val);
 
-        let n_l = 1;
-        let n_r = -1;
+        let h_avg = 0.5 * (h_elem[i] + h_elem[i + 1]);
+        let penalty = penalty_param as f64 * (p_val / h_avg);
 
-        let grad_phi_l = 1.0/h_elem[i];
-        let grad_phi_r = -1.0/h_elem[i+1];
-
+        let grad_phi_l = 1.0 / h_elem[i];       // derivative on element i at its right end
+        let grad_phi_r = -1.0 / h_elem[i + 1];  // derivative on element i+1 at its left end
+                                                
         A[(indx_l, indx_l)] = A[(indx_l, indx_l)] + penalty;
         A[(indx_l, indx_r)] = A[(indx_l, indx_r)] - penalty;
         A[(indx_r, indx_l)] = A[(indx_r, indx_l)] - penalty;
