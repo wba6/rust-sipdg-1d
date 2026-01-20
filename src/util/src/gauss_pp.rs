@@ -21,7 +21,7 @@ pub fn guass_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
         panic!("F must be 1×n or n×1 (got {}×{})", f.rows(), f.cols());
     }
 
-    //  forward elimination with partial pivoting 
+    //  forward elimination with partial pivoting
     let eps = 1e-14;
 
     for k in 0..(n.saturating_sub(1)) {
