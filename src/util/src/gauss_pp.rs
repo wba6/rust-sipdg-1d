@@ -5,7 +5,7 @@ use crate::matrix::Matrix;
 pub fn guass_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
     // basic checks
     let n = a.rows();
-    assert_eq!(a.cols(), n, "A must be square (n x n)");
+    assert_eq!(a.cols(), n, "Matrix must be square (n x n)");
 
     // Convert F (either 1xn or nx1) into a vector b of length n
     let mut b: Vec<f64> = vec![0.0; n];
