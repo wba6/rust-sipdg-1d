@@ -1,11 +1,10 @@
 use crate::matrix::Matrix;
 
 
-
 pub fn gauss_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
     // basic checks 
     let n = a.rows();
-    assert_eq!(a.cols(), n, "A must be square (n x n)");
+    assert_eq!(a.cols(), n, "Matrix must be square (n x n)");
 
     // Convert F (either 1xn or nx1) into a vector b of length n
     let mut b: Vec<f64> = vec![0.0; n];
@@ -21,11 +20,11 @@ pub fn gauss_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
         panic!("F must be 1×n or n×1 (got {}×{})", f.rows(), f.cols());
     }
 
-    //  forward elimination with partial pivoting 
+    //  forward elimination with partial pivoting
     let eps = 1e-14;
 
     for k in 0..(n.saturating_sub(1)) {
-        // find pivot row p with max 
+        // find pivot row p with max absolute value in column k
         let mut p = k;
         let mut max_val = a[(k, k)].abs();
         for i in (k + 1)..n {
@@ -59,7 +58,7 @@ pub fn gauss_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
         for i in (k + 1)..n {
             let m = a[(i, k)] / pivot;
 
-            // update row i from column k..n-1
+            // update row i from column k onwards (columns k to n-1)
             for j in k..n {
                 a[(i, j)] -= m * a[(k, j)];
             }
@@ -77,7 +76,7 @@ pub fn gauss_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
         panic!("Matrix is singular or nearly singular at final pivot");
     }
 
-    // back substitution 
+    // back substitution
     let mut x = vec![0.0; n];
 
     for i in (0..n).rev() {
