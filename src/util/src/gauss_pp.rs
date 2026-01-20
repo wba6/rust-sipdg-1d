@@ -25,7 +25,7 @@ pub fn guass_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
     let eps = 1e-14;
 
     for k in 0..(n.saturating_sub(1)) {
-        // find pivot row p with max 
+        // find pivot row p with max absolute value in column k
         let mut p = k;
         let mut max_val = a[(k, k)].abs();
         for i in (k + 1)..n {
