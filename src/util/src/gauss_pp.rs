@@ -59,7 +59,7 @@ pub fn guass_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
         for i in (k + 1)..n {
             let m = a[(i, k)] / pivot;
 
-            // update row i from column k..n-1
+            // update row i from column k onwards (columns k to n-1)
             for j in k..n {
                 a[(i, j)] -= m * a[(k, j)];
             }
