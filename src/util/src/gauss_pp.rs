@@ -2,7 +2,7 @@ use crate::matrix::Matrix;
 
 
 
-pub fn guass_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
+pub fn gauss_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
     // basic checks 
     let n = a.rows();
     assert_eq!(a.cols(), n, "A must be square (n x n)");

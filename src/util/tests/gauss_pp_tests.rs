@@ -1,7 +1,7 @@
 
 #[cfg(test)]
 mod tests {
-    use util::gauss_pp::guass_pp;
+    use util::gauss_pp::gauss_pp;
     use util::matrix::Matrix;
 
     fn assert_vec_approx_eq(a: &[f64], b: &[f64], tol: f64) {
@@ -24,7 +24,7 @@ mod tests {
                                             5.0, 7.0]);
         let f = Matrix::from_vec(1, 2, vec![11.0, 13.0]); // 1×n
 
-        let x = guass_pp(a, f);
+        let x = gauss_pp(a, f);
 
         assert_vec_approx_eq(&x, &[64.0 / 9.0, -29.0 / 9.0], 1e-12);
     }
@@ -36,7 +36,7 @@ mod tests {
                                             5.0, 7.0]);
         let f = Matrix::from_vec(2, 1, vec![11.0, 13.0]); // n×1
 
-        let x = guass_pp(a, f);
+        let x = gauss_pp(a, f);
 
         assert_vec_approx_eq(&x, &[64.0 / 9.0, -29.0 / 9.0], 1e-12);
     }
@@ -51,7 +51,7 @@ mod tests {
                                             1.0,   1.0]);
         let f = Matrix::from_vec(2, 1, vec![1.0, 2.0]);
 
-        let x = guass_pp(a, f);
+        let x = gauss_pp(a, f);
 
         let x_expected = 1.0 / (1.0 - 1e-12);
         let y_expected = 1.0 - 1e-12 * x_expected;
@@ -81,7 +81,7 @@ mod tests {
         }
 
         let f = Matrix::from_vec(3, 1, b);
-        let x = guass_pp(a, f);
+        let x = gauss_pp(a, f);
 
         assert_vec_approx_eq(&x, &x_true, 1e-12);
     }
@@ -92,7 +92,7 @@ mod tests {
         let a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0,
                                             4.0, 5.0, 6.0]);
         let f = Matrix::from_vec(1, 2, vec![1.0, 1.0]);
-        let _ = guass_pp(a, f);
+        let _ = gauss_pp(a, f);
     }
 
     #[test]
@@ -103,7 +103,7 @@ mod tests {
         // not 1×n and not n×1
         let f = Matrix::from_vec(2, 2, vec![1.0, 2.0,
                                             3.0, 4.0]);
-        let _ = guass_pp(a, f);
+        let _ = gauss_pp(a, f);
     }
 
     #[test]
@@ -113,7 +113,7 @@ mod tests {
         let a = Matrix::from_vec(2, 2, vec![1.0, 2.0,
                                             2.0, 4.0]);
         let f = Matrix::from_vec(2, 1, vec![3.0, 6.0]);
-        let _ = guass_pp(a, f);
+        let _ = gauss_pp(a, f);
     }
 
     #[test]
@@ -128,7 +128,7 @@ mod tests {
         let b = vec![0.5, -1.0, 2.0, 3.5, -4.0];
         let f = Matrix::from_vec(1, n, b.clone());
 
-        let x = guass_pp(a, f);
+        let x = gauss_pp(a, f);
         assert_vec_approx_eq(&x, &b, 1e-12);
     }
 }

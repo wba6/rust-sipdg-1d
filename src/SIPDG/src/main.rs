@@ -1,6 +1,6 @@
 use util::linespace::linespace;
 use util::matrix::Matrix;
-use util::gauss_pp::guass_pp;
+use util::gauss_pp::gauss_pp;
 
 fn main() {
     println!("Hello, world!");
@@ -166,7 +166,7 @@ fn main() {
     }
 
     // solve system
-    let u = guass_pp(A, F);
+    let u = gauss_pp(A, F);
 
     let mut l2_err_sq: f64 = 0.0;
     let npts: usize = 10;
