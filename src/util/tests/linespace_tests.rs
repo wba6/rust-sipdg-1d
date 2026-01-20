@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use math::linespace::linespace;
+    use util::linespace::linespace;
 
     // Helper to compare vectors with a small tolerance for floating point errors
     fn assert_vec_approx_eq(a: &Vec<f64>, b: &Vec<f64>) {

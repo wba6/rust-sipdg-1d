@@ -1,6 +1,6 @@
 #[cfg(test)]
 pub mod tests {
-    use math::matrix::Matrix;
+    use util::matrix::Matrix;
 
     #[test]
     fn new_fills_with_value_row_major_len() {
