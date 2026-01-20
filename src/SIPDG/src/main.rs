@@ -1,9 +1,10 @@
-use math::linespace::linespace;
-use math::matrix::Matrix;
-use math::gauss_pp::guass_pp;
+use util::linespace::linespace;
+use util::matrix::Matrix;
+use util::gauss_pp::guass_pp;
 
 fn main() {
     println!("Hello, world!");
+    // TODO Add problem stmt
 
 
     println!("Begin SIPDG Process");

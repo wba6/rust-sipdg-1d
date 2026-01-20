@@ -1,5 +1,5 @@
 [workspace]
 members = [
-"SIPDG",
-"math"
+"src/SIPDG",
+"src/util"
 ]

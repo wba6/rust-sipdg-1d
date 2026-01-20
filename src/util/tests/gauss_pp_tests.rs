@@ -1,8 +1,8 @@
 
 #[cfg(test)]
 mod tests {
-    use math::gauss_pp::guass_pp;
-    use math::matrix::Matrix;
+    use util::gauss_pp::guass_pp;
+    use util::matrix::Matrix;
 
     fn assert_vec_approx_eq(a: &[f64], b: &[f64], tol: f64) {
         assert_eq!(a.len(), b.len(), "length mismatch");
