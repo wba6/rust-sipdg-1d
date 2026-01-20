@@ -77,7 +77,7 @@ pub fn guass_pp(mut a: Matrix<f64>, f: Matrix<f64>) -> Vec<f64> {
         panic!("Matrix is singular or nearly singular at final pivot");
     }
 
-    // back substitution 
+    // back substitution
     let mut x = vec![0.0; n];
 
     for i in (0..n).rev() {
