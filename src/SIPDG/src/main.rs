@@ -7,36 +7,19 @@ use std::path::PathBuf;
 use std::fs;
 
 #[derive(Parser)]
-#[command(name = "Reader")]
-#[command(about = "Reads a specific file")]
 struct Cli {
     /// The path to the file to read
     path: PathBuf,
-
-    /// Optional: A flag to print the word count
-    #[arg(short, long)]
-    count: bool,
 }
 
 fn main() {
     println!("Hello, world!");
     // TODO Add problem stmt
-    let cli = Cli::parse();
+    let  args = Cli::parse();
 
     // Try to read the file content
-    match fs::read_to_string(&cli.path) {
-        Ok(content) => {
-            if cli.count {
-                println!("File contains {} words.", content.split_whitespace().count());
-            } else {
-                println!("--- File Content ---\n{}", content);
-            }
-        }
-        Err(e) => {
-            eprintln!("Error reading {:?}: {}", cli.path, e);
-        }
-    }
-
+    let content = fs::read_to_string(&args.path)
+        .expect("Could not read the file");
 
     println!("Begin SIPDG Process");
 
@@ -46,6 +29,22 @@ fn main() {
     let q_func = |x: f64| 0.0;
     let f_func = |x: f64| 1.0;
     let soln_function = |x:f64| (x*((1 as f64)-x))/2 as f64;
+
+    for line in content.lines() {
+        let parts: Vec<&str> = line.split('=').map(|s| s.trim()).collect();
+        
+        if parts.len() == 2 {
+            match parts[0] {
+                "q" => q_func = parts[1].parse().ok(),
+                "p" => p_func = parts[1].parse().ok(),
+                "f" => f_func = parts[1].parse().ok(),
+                _ => {} // Ignore other keys
+            }
+        }
+    }
+
+    // 4. Use the values
+    println!("Results: q={:?}, p={:?}, f={:?}", q_func, p_func, f_func);
     
     // Penalty parameter for stability
     let penalty_param: u32 = 10;
