@@ -2,9 +2,40 @@ use util::linespace::linespace;
 use util::matrix::Matrix;
 use util::gauss_pp::gauss_pp;
 
+use clap::Parser;
+use std::path::PathBuf;
+use std::fs;
+
+#[derive(Parser)]
+#[command(name = "Reader")]
+#[command(about = "Reads a specific file")]
+struct Cli {
+    /// The path to the file to read
+    path: PathBuf,
+
+    /// Optional: A flag to print the word count
+    #[arg(short, long)]
+    count: bool,
+}
+
 fn main() {
     println!("Hello, world!");
     // TODO Add problem stmt
+    let cli = Cli::parse();
+
+    // Try to read the file content
+    match fs::read_to_string(&cli.path) {
+        Ok(content) => {
+            if cli.count {
+                println!("File contains {} words.", content.split_whitespace().count());
+            } else {
+                println!("--- File Content ---\n{}", content);
+            }
+        }
+        Err(e) => {
+            eprintln!("Error reading {:?}: {}", cli.path, e);
+        }
+    }
 
 
     println!("Begin SIPDG Process");
