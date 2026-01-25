@@ -190,7 +190,7 @@ fn main() {
 
         let p_val = p_func(x_dof[idx]);
 
-        // 1. Penalty term
+        // Penalty term
         let pen = (penalty_param as f64) * (p_val / h_bnd);
         A[(idx, idx)] += pen;
 
