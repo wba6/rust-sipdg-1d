@@ -195,8 +195,8 @@ fn main() {
         A[(idx, idx)] += pen;
 
         // Consistency & Symmetry 
-        A[(idx, idx)] -= p_val * grad_phi * n; // Consistency
-        A[(idx, idx)] -= p_val * grad_phi * n; // Symmetry
+        A[(idx, idx)] += p_val * grad_phi * n; // Consistency
+        A[(idx, idx)] += p_val * grad_phi * n; // Symmetry
     }
 
     // solve system
