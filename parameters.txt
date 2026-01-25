@@ -1,5 +1,6 @@
 # ignore comments
 
-p = 1
-q = 0
+p = 1.0
+q = 0.0
+f = 1.0
 

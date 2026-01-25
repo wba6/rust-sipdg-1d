@@ -2,20 +2,55 @@ use util::linespace::linespace;
 use util::matrix::Matrix;
 use util::gauss_pp::gauss_pp;
 
+use clap::Parser;
+use std::path::PathBuf;
+use std::fs;
+
+#[derive(Parser)]
+struct Cli {
+    /// The path to the file to read
+    path: PathBuf,
+}
+
 fn main() {
     println!("Hello, world!");
     // TODO Add problem stmt
+    let  args = Cli::parse();
 
+    // Try to read the file content
+    let content = fs::read_to_string(&args.path)
+        .expect("Could not read the file");
+
+    // Initialize variables as standard numbers (f64) with default values
+    let mut q_val: f64 = 0.0;
+    let mut p_val: f64 = 1.0;
+    let mut f_val: f64 = 1.0;
+
+    // Parse the file to update the numeric values
+    for line in content.lines() {
+        let parts: Vec<&str> = line.split('=').map(|s| s.trim()).collect();
+        if parts.len() == 2 {
+            // Attempt to parse the string into an f64
+            if let Ok(value) = parts[1].parse::<f64>() {
+                match parts[0] {
+                    "q" => q_val = value,
+                    "p" => p_val = value,
+                    "f" => f_val = value,
+                    _ => {} 
+                }
+            }
+        }
+    }
 
     println!("Begin SIPDG Process");
 
     // Problem: -(p(x)u')' + q(x)u = f(x) on [0,1]
     // Note these could have to be lambdas in the future
-    let p_func = |x: f64| 1.0;
-    let q_func = |x: f64| 0.0;
-    let f_func = |x: f64| 1.0;
+    let p_func = |x: f64| q_val;
+    let q_func = |x: f64| p_val;
+    let f_func = |x: f64| f_val;
     let soln_function = |x:f64| (x*((1 as f64)-x))/2 as f64;
-    
+   
     // Penalty parameter for stability
     let penalty_param: u32 = 10;
 
