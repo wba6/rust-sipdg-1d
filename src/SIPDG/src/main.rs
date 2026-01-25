@@ -21,31 +21,36 @@ fn main() {
     let content = fs::read_to_string(&args.path)
         .expect("Could not read the file");
 
-    println!("Begin SIPDG Process");
+    // Initialize variables as standard numbers (f64) with default values
+    let mut q_val: f64 = 0.0;
+    let mut p_val: f64 = 1.0;
+    let mut f_val: f64 = 1.0;
 
-    // Problem: -(p(x)u')' + q(x)u = f(x) on [0,1]
-    // Note these could have to be lambdas in the future
-    let p_func = |x: f64| 1.0;
-    let q_func = |x: f64| 0.0;
-    let f_func = |x: f64| 1.0;
-    let soln_function = |x:f64| (x*((1 as f64)-x))/2 as f64;
-
+    // Parse the file to update the numeric values
     for line in content.lines() {
         let parts: Vec<&str> = line.split('=').map(|s| s.trim()).collect();
-        
         if parts.len() == 2 {
-            match parts[0] {
-                "q" => q_func = parts[1].parse().ok(),
-                "p" => p_func = parts[1].parse().ok(),
-                "f" => f_func = parts[1].parse().ok(),
-                _ => {} // Ignore other keys
+            // Attempt to parse the string into an f64
+            if let Ok(value) = parts[1].parse::<f64>() {
+                match parts[0] {
+                    "q" => q_val = value,
+                    "p" => p_val = value,
+                    "f" => f_val = value,
+                    _ => {} 
+                }
             }
         }
     }
 
-    // 4. Use the values
-    println!("Results: q={:?}, p={:?}, f={:?}", q_func, p_func, f_func);
-    
+    println!("Begin SIPDG Process");
+
+    // Problem: -(p(x)u')' + q(x)u = f(x) on [0,1]
+    // Note these could have to be lambdas in the future
+    let p_func = |x: f64| q_val;
+    let q_func = |x: f64| p_val;
+    let f_func = |x: f64| f_val;
+    let soln_function = |x:f64| (x*((1 as f64)-x))/2 as f64;
+   
     // Penalty parameter for stability
     let penalty_param: u32 = 10;
 
