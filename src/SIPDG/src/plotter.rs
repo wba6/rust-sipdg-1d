@@ -40,7 +40,7 @@ pub fn plot_results(
         .y_desc("u(x)")
         .draw()?;
 
-    // 1. Plot Exact Solution as a smooth continuous line
+    // Plot Exact Solution as a smooth continuous line
     chart.draw_series(LineSeries::new(
         (0..100).map(|i| {
             let x = i as f64 / 100.0;
@@ -51,7 +51,7 @@ pub fn plot_results(
     .label("Exact Solution")
     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
 
-    // 2. Plot SIPDG Numerical Solution
+    // Plot SIPDG Numerical Solution
     // In DG, we plot each element as a separate segment because nodes are not shared.
     for i in 0..num_elements {
         let idx_l = 2 * i;
