@@ -179,29 +179,24 @@ fn main() {
     let normals: [f64; 2] = [-1.0, 1.0];
 
     for side in 0..2 {
-        let idx = bnd_nodes[side]; // global dof index
-        let n = normals[side];     // outward normal
+        let idx = bnd_nodes[side];
+        let n = normals[side];
 
-        // Pick boundary element size and basis gradient at the boundary node
         let (h_bnd, grad_phi) = if side == 0 {
-            // Left boundary: first element, left node basis slope is -1/h
-            let h = h_elem[0];
-            (h, -1.0 / h)
+            (h_elem[0], -1.0 / h_elem[0]) // Left: slope is -1/h
         } else {
-            // Right boundary: last element, right node basis slope is +1/h
-            let h = h_elem[num_elements - 1];
-            (h, 1.0 / h)
+            (h_elem[num_elements - 1], 1.0 / h_elem[num_elements - 1]) // Right: slope is 1/h
         };
 
         let p_val = p_func(x_dof[idx]);
 
-        // Penalty term: sigma_0 * p / h
+        // 1. Penalty term
         let pen = (penalty_param as f64) * (p_val / h_bnd);
         A[(idx, idx)] += pen;
 
-        // Consistency + symmetry terms:
-        A[(idx, idx)] -= 2.0 * p_val * grad_phi * n;
-
+        // Consistency & Symmetry 
+        A[(idx, idx)] -= p_val * grad_phi * n; // Consistency
+        A[(idx, idx)] -= p_val * grad_phi * n; // Symmetry
     }
 
     // solve system
