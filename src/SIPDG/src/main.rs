@@ -1,6 +1,9 @@
 use util::linespace::linespace;
 use util::matrix::Matrix;
 use util::gauss_pp::gauss_pp;
+mod mesh;
+use mesh::generate_1d_gmesh;
+
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -64,7 +67,8 @@ fn main() {
     let num_elements: usize = 20;
 
     // Generate evenly spaced points across the domain
-    let x_interface: Vec<f64> = linespace(domain_a, domain_b, num_elements + 1);
+    // let x_interface: Vec<f64> = linespace(domain_a, domain_b, num_elements + 1);
+    let x_interface = generate_1d_gmesh(domain_a, domain_b, num_elements);
     println!("Evenly spaced points are \n {:?}", x_interface);
 
     // With DG we do not share nodes 
