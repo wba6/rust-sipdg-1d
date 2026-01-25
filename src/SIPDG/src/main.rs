@@ -1,6 +1,7 @@
 use util::linespace::linespace;
 use util::matrix::Matrix;
 use util::gauss_pp::gauss_pp;
+mod plotter;
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -46,8 +47,8 @@ fn main() {
 
     // Problem: -(p(x)u')' + q(x)u = f(x) on [0,1]
     // Note these could have to be lambdas in the future
-    let p_func = |x: f64| q_val;
-    let q_func = |x: f64| p_val;
+    let p_func = |x: f64| p_val;
+    let q_func = |x: f64| q_val;
     let f_func = |x: f64| f_val;
     let soln_function = |x:f64| (x*((1 as f64)-x))/2 as f64;
    
@@ -138,66 +139,64 @@ fn main() {
 
     // interface integral
     for i in 0..num_elements-1 {
-        // interface is between R_i and L_{i+1}
-        let indx_l: usize = 2 * i + 1;     // right node of element i
-        let indx_r: usize = 2 * i + 2;     // left node of element i+1
+        // interface is between right node of element i and left node of element i+1
+        let idx_l = 2 * i + 1;
+        let idx_r = 2 * i + 2;
 
-        let x_val = x_dof[indx_l];         // interface x
-        let p_val = p_func(x_val);
+        let x_int = x_dof[idx_l];
+        let p_val = p_func(x_int);
 
-        let h_avg = 0.5 * (h_elem[i] + h_elem[i + 1]);
-        let penalty = penalty_param as f64 * (p_val / h_avg);
-
-        let grad_phi_l = 1.0 / h_elem[i];       // derivative on element i at its right end
-        let grad_phi_r = -1.0 / h_elem[i + 1];  // derivative on element i+1 at its left end
-                                                
-        A[(indx_l, indx_l)] = A[(indx_l, indx_l)] + penalty;
-        A[(indx_l, indx_r)] = A[(indx_l, indx_r)] - penalty;
-        A[(indx_r, indx_l)] = A[(indx_r, indx_l)] - penalty;
-        A[(indx_r, indx_r)] = A[(indx_r, indx_r)] + penalty;
-
-        A[(indx_l, indx_l)] = A[(indx_l, indx_l)] - 0.5 * p_val * (1.0/h_elem[i]);
-        A[(indx_l, indx_r)] = A[(indx_l, indx_r)] - 0.5 * p_val * (-1.0/h_elem[i+1]);
-
-        A[(indx_l, indx_l)] = A[(indx_l, indx_l)] - 0.5 * p_val * (1.0/h_elem[i]);
-        A[(indx_r, indx_l)] = A[(indx_r, indx_l)] + 0.5 * p_val * (1.0/h_elem[i]);
-
+        let h_l = h_elem[i];
+        let h_r = h_elem[i + 1];
+        let h_avg = 0.5 * (h_l + h_r);
         
-        A[(indx_r, indx_l)] = A[(indx_r, indx_l)] + 0.5 * p_val * (1.0/h_elem[i]);
-        A[(indx_r, indx_r)] = A[(indx_r, indx_r)] + 0.5 * p_val * (-1.0/h_elem[i+1]);
+        // Derivatives of basis functions at the interface
+        let grad_phi_l = 1.0 / h_l;
+        let grad_phi_r = -1.0 / h_r;
 
-        A[(indx_l, indx_r)] = A[(indx_l, indx_r)] - 0.5 * p_val * grad_phi_r + 0.5 * p_val * grad_phi_l; 
-        A[(indx_r, indx_l)] = A[(indx_r, indx_l)] + 0.5 * p_val * grad_phi_l - 0.5 * p_val * grad_phi_r; 
+        // Penalty Term (Stability)
+        let penalty = (penalty_param as f64) * (p_val / h_avg);
+        A[(idx_l, idx_l)] += penalty;
+        A[(idx_l, idx_r)] -= penalty;
+        A[(idx_r, idx_l)] -= penalty;
+        A[(idx_r, idx_r)] += penalty;
 
+        // Consistency & Symmetry Terms
+        // These terms enforce the continuity of the solution and flux
+        // Term: - <p u'n> [v] - <p v'n> [u]
+        
+        // Contribution to A[idx_l, idx_l]
+        A[(idx_l, idx_l)] -= p_val * grad_phi_l;
+        // Contribution to A[idx_l, idx_r]
+        A[(idx_l, idx_r)] -= 0.5 * p_val * grad_phi_r - 0.5 * p_val * grad_phi_l;
+        // Contribution to A[idx_r, idx_l]
+        A[(idx_r, idx_l)] += 0.5 * p_val * grad_phi_l - 0.5 * p_val * grad_phi_r;
+        // Contribution to A[idx_r, idx_r]
+        A[(idx_r, idx_r)] += p_val * grad_phi_r;
     }
 
     let bnd_nodes: [usize; 2] = [0, n_dof - 1];
     let normals: [f64; 2] = [-1.0, 1.0];
 
     for side in 0..2 {
-        let idx = bnd_nodes[side]; // global dof index
-        let n = normals[side];     // outward normal
+        let idx = bnd_nodes[side];
+        let n = normals[side];
 
-        // Pick boundary element size and basis gradient at the boundary node
         let (h_bnd, grad_phi) = if side == 0 {
-            // Left boundary: first element, left node basis slope is -1/h
-            let h = h_elem[0];
-            (h, -1.0 / h)
+            (h_elem[0], -1.0 / h_elem[0]) // Left: slope is -1/h
         } else {
-            // Right boundary: last element, right node basis slope is +1/h
-            let h = h_elem[num_elements - 1];
-            (h, 1.0 / h)
+            (h_elem[num_elements - 1], 1.0 / h_elem[num_elements - 1]) // Right: slope is 1/h
         };
 
         let p_val = p_func(x_dof[idx]);
 
-        // Penalty term: sigma_0 * p / h
+        // Penalty term
         let pen = (penalty_param as f64) * (p_val / h_bnd);
         A[(idx, idx)] += pen;
 
-        // Consistency + symmetry terms:
-        A[(idx, idx)] -= 2.0 * p_val * grad_phi * n;
-
+        // Consistency & Symmetry 
+        A[(idx, idx)] += p_val * grad_phi * n; // Consistency
+        A[(idx, idx)] += p_val * grad_phi * n; // Symmetry
     }
 
     // solve system
@@ -253,4 +252,7 @@ fn main() {
     println!("Total DoFs: {}", n_dof);
     println!("L2 Error: {:.6e}", l2_error);
 
+    if let Err(e) = plotter::plot_results(&x_dof, &u, soln_function, n_dof) {
+        eprintln!("Failed to create plot: {}", e);
+    }
 }
