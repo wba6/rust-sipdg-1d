@@ -1,7 +1,9 @@
+use mesh::generate_mesh;
 use util::linespace::linespace;
 use util::matrix::Matrix;
 use util::gauss_pp::gauss_pp;
 mod plotter;
+mod mesh;
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -64,29 +66,14 @@ fn main() {
     // number of elements
     let num_elements: usize = 20;
 
-    // Generate evenly spaced points across the domain
-    let x_interface: Vec<f64> = linespace(domain_a, domain_b, num_elements + 1);
-    println!("Evenly spaced points are \n {:?}", x_interface);
-
-    // With DG we do not share nodes 
-    let n_dof: usize = 2 * num_elements;
-    let mut x_dof: Vec<f64> = vec![0.0; n_dof];
-    let mut h_elem: Vec<f64> = vec![0.0; num_elements];
-
-    // Fill node coordinates and element sizes
-    for i in 0..num_elements {
-        let x_l: f64 = x_interface[i];
-        let x_r: f64 = x_interface[i + 1];
-        h_elem[i] = x_r - x_l;
-
-        // map global DoF indices for this element
-        x_dof[2*i] = x_l;
-        x_dof[2*i+1] = x_r;
-    }
+    // Generate the mesh
+    let (h_elem, x_dof) = generate_mesh(domain_a, domain_b, num_elements);
+    
     println!("Elements array \n {:?}", h_elem);
     println!("x dof is \n {:?}", x_dof);
 
     // -------------------- Assemble system matrix ---------
+    let n_dof: usize = x_dof.len();
     let mut A:Matrix<f64> = Matrix::<f64>::new(n_dof, n_dof, 0.0);     
     let mut F:Matrix<f64> = Matrix::<f64>::new(1, n_dof, 0.0);
 
