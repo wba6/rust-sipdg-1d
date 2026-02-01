@@ -1,5 +1,4 @@
 use mesh::generate_mesh;
-use util::linespace::linespace;
 use util::matrix::Matrix;
 use util::gauss_pp::gauss_pp;
 mod plotter;
