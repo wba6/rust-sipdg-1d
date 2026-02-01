@@ -3,8 +3,8 @@ use util::linespace::linespace;
 /// Generates a 1D discontinuous-Galerkin mesh on `[domain_a, domain_b]`.
 ///
 /// This builds a uniform partition of the domain into `num_elements` elements, then
-/// creates **element-local** degrees of freedom (DoFs) where each element owns its
-/// left and right endpoint (DG nodes are *not* shared between neighboring elements).
+/// creates element-local degrees of freedom (DoFs) where each element owns its
+/// left and right endpoint (DG nodes are not shared between neighboring elements).
 ///
 /// Returns `(h_elem, x_dof)` where:
 /// - `h_elem[i]` is the length of element `i`
