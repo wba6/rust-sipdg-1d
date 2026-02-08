@@ -35,7 +35,7 @@ fn main() {
     let domain_b: f64 = 1.0;
 
     // number of elements
-    let num_elements: usize = 20;
+    let num_elements: usize = 30;
 
     // Generate the mesh
     let (h_elem, x_dof) = generate_mesh(domain_a, domain_b, num_elements);
@@ -44,7 +44,7 @@ fn main() {
     println!("x dof is \n {:?}", x_dof);
 
     let n_dof: usize = x_dof.len();
-    let mut assembler = pde::SipdgAssembler::new(h_elem, x_dof, 10.0);
+    let mut assembler = pde::SipdgAssembler::new(h_elem, x_dof, 80.0);
 
     // -------------------- Assemble system matrix ---------
     assembler.assemble_volume(&problem);

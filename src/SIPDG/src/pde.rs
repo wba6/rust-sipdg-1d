@@ -60,7 +60,7 @@ impl BoundaryCondition for DirichletBC {
         let pen = pen_param * (p_val / h);
 
         // Matrix A contributions (Stability + Consistency + Symmetry)
-        a[(idx, idx)] += pen + (2.0 * p_val * grad_phi * n);
+        a[(idx, idx)] += pen - (2.0 * p_val * grad_phi * n);
 
         // RHS F contributions (Nitsche enforcement)
         // F += g * [Penalty - (p * grad_u * n)]
@@ -122,14 +122,21 @@ impl SipdgAssembler {
             self.a[(idx_r, idx_l)] -= pen;
             self.a[(idx_r, idx_r)] += pen;
 
-            // Continuity & Symmetry (Simplified logic)
+            // Continuity & Symmetry
             let g_l = 1.0 / self.h_elem[i];
-            let g_r = -1.0 / self.h_elem[i+1];
+            let g_r = -1.0 / self.h_elem[i+1]; 
 
-            self.a[(idx_l, idx_l)] -= p_val * g_l;
-            self.a[(idx_l, idx_r)] -= 0.5 * p_val * (g_r - g_l);
-            self.a[(idx_r, idx_l)] += 0.5 * p_val * (g_l - g_r);
-            self.a[(idx_r, idx_r)] += p_val * g_r;
+            // consistency terms: -0.5 * p * grad_u * [v]
+            self.a[(idx_l, idx_l)] -= 0.5 * p_val * g_l;
+            self.a[(idx_l, idx_r)] -= 0.5 * p_val * g_r;
+            self.a[(idx_r, idx_l)] += 0.5 * p_val * g_l;
+            self.a[(idx_r, idx_r)] += 0.5 * p_val * g_r;
+
+            // symmetry terms: -0.5 * p * grad_v * [u]
+            self.a[(idx_l, idx_l)] -= 0.5 * p_val * g_l;
+            self.a[(idx_r, idx_l)] -= 0.5 * p_val * g_r;
+            self.a[(idx_l, idx_r)] += 0.5 * p_val * g_l;
+            self.a[(idx_r, idx_r)] += 0.5 * p_val * g_r;
         }
     }
 
