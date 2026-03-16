@@ -1,5 +1,35 @@
 use util::matrix::Matrix;
 
+
+pub struct Element {
+    // Global DoF index for the left node
+    pub n_left: usize,
+    // Global DoF index for the right node
+    pub n_right: usize,
+    // 2x2 Local stiffness/mass matrix
+    pub local_matrix: Matrix<f64>,
+    // 1x2 Local right-hand side
+    pub local_rhs: Matrix<f64>,
+    // Local solution (populated after global solve)
+    pub local_soln: Vec<f64>,
+    // Affine translation data: stores element width (h_k) and midpoint (x_mid)
+    pub h_k: f64,
+    pub x_mid: f64,
+}
+
+pub struct Interface {
+    // Physical x coordinate of the interface
+    pub x_coord: f64,
+    // Index of the element to the left (K-)
+    pub k_minus: Option<usize>,
+    // Index of the element to the right (K+)
+    pub k_plus: Option<usize>,
+    // 2x2 Off-diagonal coupling block. 
+    // Row/Col 0 relates to K-'s right node.
+    // Row/Col 1 relates to K+'s left node.
+    pub off_diagonal: Matrix<f64>, 
+}
+
 pub trait PdeProblem {
     fn p(&self, x: f64) -> f64;
     fn q(&self, x: f64) -> f64;
