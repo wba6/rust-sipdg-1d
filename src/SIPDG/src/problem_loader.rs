@@ -19,7 +19,7 @@ pub fn load_problem_from_file(path: &Path) -> ConfigurableProblem {
         if parts.len() == 2 {
             if let Ok(val) = parts[1].parse::<f64>() {
                 match parts[0] {
-                    "p" => prob.p_val = val,
+                    "a" | "p" => prob.a_val = val,
                     "q" => prob.q_val = val,
                     "f" => prob.f_val = val,
                     _ => println!("Warning: Unknown parameter {}", parts[0]),

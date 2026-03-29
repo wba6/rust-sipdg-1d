@@ -25,8 +25,8 @@ fn main() {
     let problem = load_problem_from_file(&args.path);
     let soln_function = |x:f64| (x*((1 as f64)-x))/2 as f64;
     
-    println!("Loaded Parameters: p={}, q={}, f={}", 
-             problem.p_val, problem.q_val, problem.f_val);
+    println!("Loaded Parameters: a={}, q={}, f={}", 
+             problem.a_val, problem.q_val, problem.f_val);
     println!("Begin SIPDG Process");
 
     // ------------------- Generate Mesh --------------------
@@ -59,7 +59,7 @@ fn main() {
     assembler.apply_boundaries(&problem, &left_bc, &right_bc, &mut a, &mut rhs);
                                          
     // solve system
-    let u = gauss_pp(a, rhs);
+    let p = gauss_pp(a, rhs);
 
     let mut l2_err_sq: f64 = 0.0;
     let npts: usize = 10;
@@ -72,8 +72,8 @@ fn main() {
         let x_r = assembler.x_dof[idx1];
         let h = assembler.elements[k].h_k;
 
-        let ul = u[idx0];
-        let ur = u[idx1];
+        let pl = p[idx0];
+        let pr = p[idx1];
 
         let step = (x_r - x_l) / ((npts - 1) as f64);
 
@@ -82,9 +82,9 @@ fn main() {
         let mut prev_err2 = {
             let phi1 = (x_r - prev_x) / h;
             let phi2 = (prev_x - x_l) / h;
-            let uh = ul * phi1 + ur * phi2;
-            let uex = soln_function(prev_x);
-            let e = uh - uex;
+            let ph = pl * phi1 + pr * phi2;
+            let pex = soln_function(prev_x);
+            let e = ph - pex;
             e * e
         };
 
@@ -94,9 +94,9 @@ fn main() {
             let phi1 = (x_r - x) / h;
             let phi2 = (x - x_l) / h;
 
-            let uh = ul * phi1 + ur * phi2;
-            let uex = soln_function(x);
-            let e = uh - uex;
+            let ph = pl * phi1 + pr * phi2;
+            let pex = soln_function(x);
+            let e = ph - pex;
             let err2 = e * e;
 
             let dx = x - prev_x;
@@ -111,7 +111,7 @@ fn main() {
     println!("Total DoFs: {}", n_dof);
     println!("L2 Error: {:.6e}", l2_error);
 
-    if let Err(e) = plotter::plot_results(&assembler.x_dof, &u, soln_function, n_dof) {
+    if let Err(e) = plotter::plot_results(&assembler.x_dof, &p, soln_function, n_dof) {
         eprintln!("Failed to create plot: {}", e);
     }
 }

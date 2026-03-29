@@ -1,5 +1,5 @@
 use util::matrix::Matrix;
-use util::quadrature::{get_gauss_legendre_3pts, integrate};
+use util::quadrature::get_gauss_legendre_3pts;
 
 pub struct Element {
     // Global DoF index for the left node
@@ -10,8 +10,8 @@ pub struct Element {
     pub local_matrix: Matrix<f64>,
     // 1x2 Local right-hand side
     pub local_rhs: Matrix<f64>,
-    // Local solution (populated after global solve)
-    pub local_soln: Vec<f64>,
+    // Local solution p (populated after global solve)
+    pub local_p: Vec<f64>,
     // Affine translation data: stores element width (h_k) and midpoint (x_mid)
     pub h_k: f64,
     pub x_mid: f64,
@@ -28,17 +28,46 @@ impl Element {
             n_right,
             local_matrix: Matrix::new(2, 2, 0.0),
             local_rhs: Matrix::new(1, 2, 0.0),
-            local_soln: Vec::new(),
+            local_p: Vec::new(),
             h_k,
             x_mid: (x_l + x_r) / 2.0,
             x_l,
             x_r,
         }
     }
+
+    /// Maps a reference coordinate xi in [-1, 1] to the physical coordinate x in [x_l, x_r]
+    pub fn map_to_physical(&self, xi: f64) -> f64 {
+        self.x_mid + (self.h_k / 2.0) * xi
+    }
+
+    /// Returns the Jacobian J = dx/dxi = h_k / 2
+    pub fn jacobian(&self) -> f64 {
+        self.h_k / 2.0
+    }
+
+    /// Evaluates the i-th basis function at reference coordinate xi
+    pub fn phi(&self, i: usize, xi: f64) -> f64 {
+        match i {
+            0 => 0.5 * (1.0 - xi),
+            1 => 0.5 * (1.0 + xi),
+            _ => panic!("Invalid basis function index"),
+        }
+    }
+
+    /// Evaluates the physical derivative of the i-th basis function dphi_i/dx
+    pub fn dphi_dx(&self, i: usize) -> f64 {
+        let dphi_dxi = match i {
+            0 => -0.5,
+            1 => 0.5,
+            _ => panic!("Invalid basis function index"),
+        };
+        dphi_dxi / self.jacobian()
+    }
 }
 
 pub struct Interface {
-    // Physical x coordinate of the interface
+    // Physical x coordinate of the interface x_n
     pub x_coord: f64,
     // Index of the element to the left (K-)
     pub k_minus: Option<usize>,
@@ -60,26 +89,28 @@ impl Interface {
     }
 }
 
+/// PDE Problem definition: - (a(x) p'(x))' + q(x) p(x) = f(x)
+/// In the PDF, a(x) is assumed to be 1 and q(x) is 0.
 pub trait PdeProblem {
-    fn p(&self, x: f64) -> f64;
+    fn a(&self, x: f64) -> f64;
     fn q(&self, x: f64) -> f64;
     fn f(&self, x: f64) -> f64;
 }
 
 pub struct ConfigurableProblem {
-    pub p_val: f64,
+    pub a_val: f64,
     pub q_val: f64,
     pub f_val: f64,
 }
 
 impl Default for ConfigurableProblem {
     fn default() -> Self {
-        Self { p_val: 1.0, q_val: 0.0, f_val: 1.0 }
+        Self { a_val: 1.0, q_val: 0.0, f_val: 1.0 }
     }
 }
 
 impl PdeProblem for ConfigurableProblem {
-    fn p(&self, _x: f64) -> f64 { self.p_val }
+    fn a(&self, _x: f64) -> f64 { self.a_val }
     fn q(&self, _x: f64) -> f64 { self.q_val }
     fn f(&self, _x: f64) -> f64 { self.f_val }
 }
@@ -87,7 +118,7 @@ impl PdeProblem for ConfigurableProblem {
 pub struct SipdgAssembler {
     pub elements: Vec<Element>,
     pub interfaces: Vec<Interface>,
-    pub penalty_param: f64,
+    pub sigma_0: f64, // Penalty parameter sigma^0 in PDF
     pub x_dof: Vec<f64>,
 }
 
@@ -99,13 +130,15 @@ pub trait BoundaryCondition {
         &self,
         side: Side,
         elem_idx: usize,
-        assembler: &mut SipdgAssembler,
+        assembler: &SipdgAssembler,
         prob: &impl PdeProblem,
         a_global: &mut Matrix<f64>,
         f_global: &mut Matrix<f64>,
     );
 }
 
+/// Dirichlet Boundary Condition: p(x) = value
+/// Formulation follows PDF Equation (18)
 pub struct DirichletBC { pub value: f64 }
 
 impl BoundaryCondition for DirichletBC {
@@ -113,7 +146,7 @@ impl BoundaryCondition for DirichletBC {
         &self,
         side: Side,
         elem_idx: usize,
-        assembler: &mut SipdgAssembler,
+        assembler: &SipdgAssembler,
         prob: &impl PdeProblem,
         a_global: &mut Matrix<f64>,
         f_global: &mut Matrix<f64>,
@@ -128,35 +161,89 @@ impl BoundaryCondition for DirichletBC {
             Side::Left => elem.n_left,
             Side::Right => elem.n_right,
         };
+        let other_idx = match side {
+            Side::Left => elem.n_right,
+            Side::Right => elem.n_left,
+        };
 
+        let a_val = prob.a(x);
+        let pen = assembler.sigma_0 * (a_val / h);
+
+        // Basis function gradients at the boundary
+        let grad_phi_i = match side { Side::Left => -1.0 / h, Side::Right => 1.0 / h };
+        let grad_phi_j = match side { Side::Left => 1.0 / h, Side::Right => -1.0 / h };
+
+        // For Dirichlet, [p] = -p^+ at x_0 and [p] = p^- at x_N (using PDF Eq 5 signs)
+        // However, we handle signs consistently: 
+        // LHS term: - {a p'} [v] - {a v'} [p] + (sigma/h) [p] [v]
+        // Left boundary (n=0): [v] = -v^+, {v'} = v'^+, [p] = -p^+, {p'} = p'^+
+        // Term 1: - p'^+ (-v^+) = p'^+ v^+
+        // Term 2: - v'^+ (-p^+) = v'^+ p^+
+        // Term 3: (sigma/h) (-p^+) (-v^+) = (sigma/h) p^+ v^+
+        
         let n = match side { Side::Left => -1.0, Side::Right => 1.0 };
-        // Grad phi for the boundary node
-        let grad_phi = match side { Side::Left => -1.0 / h, Side::Right => 1.0 / h };
-        // Grad phi for the OTHER node in the same element
-        let grad_phi_other = match side { Side::Left => 1.0 / h, Side::Right => -1.0 / h };
-        let other_idx = match side { Side::Left => elem.n_right, Side::Right => elem.n_left };
-
-        let p_val = prob.p(x);
-        let pen = assembler.penalty_param * (p_val / h);
-
-        // Matrix A contributions (Stability + Consistency + Symmetry)
-        // (u_idx, v_idx)
-        a_global[(idx, idx)] += pen - (2.0 * p_val * grad_phi * n);
+        // Consistency & Symmetry: - a * grad_p * n * v - a * grad_v * n * p
+        // Penalty: (sigma/h) * p * v
         
-        // (u_other, v_idx)
-        a_global[(other_idx, idx)] -= p_val * grad_phi_other * n;
-        
-        // (u_idx, v_other)
-        a_global[(idx, other_idx)] -= p_val * grad_phi_other * n;
+        // Matrix A contributions (LHS)
+        // (p_i, v_i)
+        a_global[(idx, idx)] += pen - 2.0 * a_val * grad_phi_i * n;
+        // (p_j, v_i)
+        a_global[(other_idx, idx)] -= a_val * grad_phi_j * n;
+        // (p_i, v_j)
+        a_global[(idx, other_idx)] -= a_val * grad_phi_j * n;
 
-        // RHS F contributions (Nitsche enforcement)
-        f_global[(0, idx)] += self.value * (pen - (p_val * grad_phi * n));
-        f_global[(0, other_idx)] -= self.value * (p_val * grad_phi_other * n);
+        // RHS F contributions (following Eq 18 signs)
+        // Left (n=0): + v'(x0) g1 - (sigma/h) g1 v(x0)
+        // Right (n=N): - v'(xN) g2 + (sigma/h) g2 v(xN)
+        match side {
+            Side::Left => {
+                f_global[(0, idx)] += self.value * (a_val * grad_phi_i - pen);
+                f_global[(0, other_idx)] += self.value * (a_val * grad_phi_j);
+            }
+            Side::Right => {
+                f_global[(0, idx)] += self.value * (-a_val * grad_phi_i + pen);
+                f_global[(0, other_idx)] += self.value * (-a_val * grad_phi_j);
+            }
+        }
+    }
+}
+
+/// Neumann Boundary Condition: a(x) p'(x) = value
+/// Formulation follows PDF Equation (27)
+pub struct NeumannBC { pub value: f64 }
+
+impl BoundaryCondition for NeumannBC {
+    fn apply(
+        &self,
+        side: Side,
+        elem_idx: usize,
+        assembler: &SipdgAssembler,
+        _prob: &impl PdeProblem,
+        _a_global: &mut Matrix<f64>,
+        f_global: &mut Matrix<f64>,
+    ) {
+        let elem = &assembler.elements[elem_idx];
+        let idx = match side {
+            Side::Left => elem.n_left,
+            Side::Right => elem.n_right,
+        };
+
+        // Neumann terms on RHS: - p'(x0)v(x0) at left, + p'(xN)v(xN) at right
+        // Since a(x)p'(x) = value, p'(x) = value / a(x)
+        match side {
+            Side::Left => {
+                f_global[(0, idx)] -= self.value;
+            }
+            Side::Right => {
+                f_global[(0, idx)] += self.value;
+            }
+        }
     }
 }
 
 impl SipdgAssembler {
-    pub fn new(h_elem: Vec<f64>, x_dof: Vec<f64>, penalty: f64) -> Self {
+    pub fn new(h_elem: Vec<f64>, x_dof: Vec<f64>, sigma_0: f64) -> Self {
         let num_elements = h_elem.len();
         let mut elements = Vec::with_capacity(num_elements);
         for i in 0..num_elements {
@@ -172,55 +259,57 @@ impl SipdgAssembler {
         Self {
             elements,
             interfaces,
-            penalty_param: penalty,
+            sigma_0,
             x_dof,
         }
     }
 
-    /// Assembles (Int p u' v') and (Int q u v) and (Int f v) using Gauss-Legendre quadrature
+    /// Jump: [v] = v^- - v^+
+    fn jump(v_minus: f64, v_plus: f64) -> f64 {
+        v_minus - v_plus
+    }
+
+    /// Average: {v} = 0.5 * (v^- + v^+)
+    fn average(v_minus: f64, v_plus: f64) -> f64 {
+        0.5 * (v_minus + v_plus)
+    }
+
+    /// Assembles (Int a p' v') and (Int q p v) and (Int f v) using the reference element [-1, 1]
     pub fn assemble_volume(&mut self, prob: &impl PdeProblem) {
         let quad_pts = get_gauss_legendre_3pts();
 
         for elem in &mut self.elements {
-            let h = elem.h_k;
-            let x_l = elem.x_l;
-            let x_r = elem.x_r;
+            let det_j = elem.jacobian();
 
-            // Assemble local matrix (2x2)
             for i in 0..2 {
                 for j in 0..2 {
-                    let dphi_i = if i == 0 { -1.0 / h } else { 1.0 / h };
-                    let dphi_j = if j == 0 { -1.0 / h } else { 1.0 / h };
+                    let mut stiffness = 0.0;
+                    let mut mass = 0.0;
+                    
+                    let dphi_i_dx = elem.dphi_dx(i);
+                    let dphi_j_dx = elem.dphi_dx(j);
 
-                    // p(x) u' v' term
-                    let stiff = integrate(|x| prob.p(x) * dphi_i * dphi_j, x_l, x_r, &quad_pts);
+                    for pt in &quad_pts {
+                        let x = elem.map_to_physical(pt.xi);
+                        let w = pt.weight;
 
-                    // q(x) u v term
-                    let mass = integrate(
-                        |x| {
-                            let phi_i = if i == 0 { (x_r - x) / h } else { (x - x_l) / h };
-                            let phi_j = if j == 0 { (x_r - x) / h } else { (x - x_l) / h };
-                            prob.q(x) * phi_i * phi_j
-                        },
-                        x_l,
-                        x_r,
-                        &quad_pts,
-                    );
+                        // a(x) p' v'
+                        stiffness += w * prob.a(x) * dphi_i_dx * dphi_j_dx;
 
-                    elem.local_matrix[(i, j)] = stiff + mass;
+                        // q(x) p v
+                        mass += w * prob.q(x) * elem.phi(i, pt.xi) * elem.phi(j, pt.xi);
+                    }
+
+                    elem.local_matrix[(i, j)] = (stiffness + mass) * det_j;
                 }
 
-                // f(x) v term
-                let load = integrate(
-                    |x| {
-                        let phi_i = if i == 0 { (x_r - x) / h } else { (x - x_l) / h };
-                        prob.f(x) * phi_i
-                    },
-                    x_l,
-                    x_r,
-                    &quad_pts,
-                );
-                elem.local_rhs[(0, i)] = load;
+                // f(x) v
+                let mut load = 0.0;
+                for pt in &quad_pts {
+                    let x = elem.map_to_physical(pt.xi);
+                    load += pt.weight * prob.f(x) * elem.phi(i, pt.xi);
+                }
+                elem.local_rhs[(0, i)] = load * det_j;
             }
         }
     }
@@ -231,62 +320,59 @@ impl SipdgAssembler {
             let k_plus_idx = interface.k_plus.expect("Interface missing right element");
 
             let x_int = interface.x_coord;
-            let p_val = prob.p(x_int);
+            let a_val = prob.a(x_int);
 
-            let h_l = self.elements[k_minus_idx].h_k;
-            let h_r = self.elements[k_plus_idx].h_k;
-            let h_avg = 0.5 * (h_l + h_r);
+            let elem_m = &self.elements[k_minus_idx];
+            let elem_p = &self.elements[k_plus_idx];
 
-            let pen = self.penalty_param * (p_val / h_avg);
+            let h_avg = Self::average(elem_m.h_k, elem_p.h_k);
+            let pen = self.sigma_0 * (a_val / h_avg);
 
-            // Gradients at interface:
-            // K-: phi_L' = -1/h_l, phi_R' = 1/h_l
-            // K+: phi_L' = -1/h_r, phi_R' = 1/h_r
-            let g_l0 = -1.0 / h_l;
-            let g_l1 = 1.0 / h_l;
-            let g_r0 = -1.0 / h_r;
-            let g_r1 = 1.0 / h_r;
+            // Gradients at interface (evaluated on physical elements)
+            let g_m = [elem_m.dphi_dx(0), elem_m.dphi_dx(1)];
+            let g_p = [elem_p.dphi_dx(0), elem_p.dphi_dx(1)];
 
-            // [u] = u_R^- - u_L^+ = u_1 - u_2  (using indices 0..3 for [L-, R-, L+, R+])
-            // {p u'} = 0.5 * p * ( (u_0*g_l0 + u_1*g_l1) + (u_2*g_r0 + u_3*g_r1) )
-            
-            // Term: - {p u'} [v] - {p v'} [u] + pen [u] [v]
-            // where [v] = v_1 - v_2
-            
-            let c = 0.5 * p_val;
+            // Basis values at the interface:
+            // K- at its right end (xi=1): phi_0=0, phi_1=1
+            // K+ at its left end (xi=-1): phi_0=1, phi_1=0
+            let v_m = [0.0, 1.0];
+            let v_p = [1.0, 0.0];
 
-            // Mapping: 0->L-, 1->R-, 2->L+, 3->R+
-            
-            // Penalty: pen * (u1 - u2) * (v1 - v2)
-            interface.matrix[(1, 1)] += pen;
-            interface.matrix[(1, 2)] -= pen;
-            interface.matrix[(2, 1)] -= pen;
-            interface.matrix[(2, 2)] += pen;
+            for i in 0..4 {
+                for j in 0..4 {
+                    // Extract basis values and derivatives for trial/test functions
+                    let (vi_m, vi_p) = match i {
+                        0 => (v_m[0], 0.0), 1 => (v_m[1], 0.0),
+                        2 => (0.0, v_p[0]), 3 => (0.0, v_p[1]),
+                        _ => unreachable!(),
+                    };
+                    let (dvi_m, dvi_p) = match i {
+                        0 => (g_m[0], 0.0), 1 => (g_m[1], 0.0),
+                        2 => (0.0, g_p[0]), 3 => (0.0, g_p[1]),
+                        _ => unreachable!(),
+                    };
 
-            // Consistency: - 0.5 * p * (u0*g_l0 + u1*g_l1 + u2*g_r0 + u3*g_r1) * (v1 - v2)
-            for u_node in 0..4 {
-                let grad = match u_node {
-                    0 => g_l0,
-                    1 => g_l1,
-                    2 => g_r0,
-                    3 => g_r1,
-                    _ => unreachable!(),
-                };
-                interface.matrix[(1, u_node)] -= c * grad; // v1 part
-                interface.matrix[(2, u_node)] += c * grad; // v2 part
-            }
+                    let (pj_m, pj_p) = match j {
+                        0 => (v_m[0], 0.0), 1 => (v_m[1], 0.0),
+                        2 => (0.0, v_p[0]), 3 => (0.0, v_p[1]),
+                        _ => unreachable!(),
+                    };
+                    let (dpj_m, dpj_p) = match j {
+                        0 => (g_m[0], 0.0), 1 => (g_m[1], 0.0),
+                        2 => (0.0, g_p[0]), 3 => (0.0, g_p[1]),
+                        _ => unreachable!(),
+                    };
 
-            // Symmetry: - 0.5 * p * (v0*g_l0 + v1*g_l1 + v2*g_r0 + v3*g_r1) * (u1 - u2)
-            for v_node in 0..4 {
-                let grad = match v_node {
-                    0 => g_l0,
-                    1 => g_l1,
-                    2 => g_r0,
-                    3 => g_r1,
-                    _ => unreachable!(),
-                };
-                interface.matrix[(v_node, 1)] -= c * grad; // u1 part
-                interface.matrix[(v_node, 2)] += c * grad; // u2 part
+                    // Terms: pen [p] [v] - {a p'} [v] - {a v'} [p]
+                    let jump_v = Self::jump(vi_m, vi_p);
+                    let jump_p = Self::jump(pj_m, pj_p);
+                    let avg_dp = Self::average(dpj_m, dpj_p);
+                    let avg_dv = Self::average(dvi_m, dvi_p);
+
+                    interface.matrix[(i, j)] += pen * jump_p * jump_v
+                                              - a_val * avg_dp * jump_v
+                                              - a_val * avg_dv * jump_p;
+                }
             }
         }
     }
@@ -330,7 +416,7 @@ impl SipdgAssembler {
     }
 
     pub fn apply_boundaries(
-        &mut self,
+        &self,
         prob: &impl PdeProblem,
         left_bc: &impl BoundaryCondition,
         right_bc: &impl BoundaryCondition,
