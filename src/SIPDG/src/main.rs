@@ -50,14 +50,16 @@ fn main() {
     assembler.assemble_volume(&problem);
     assembler.assemble_interfaces(&problem);
 
+    let (mut a, mut rhs) = assembler.assemble_to_global();
+
     // Define the specific conditions for this run
     let left_bc = DirichletBC { value: 0.0 };  // u(0) = 0
     let right_bc = DirichletBC { value: 0.0 }; // u(1) = 0
 
-    assembler.apply_boundaries(&problem, &left_bc, &right_bc);
+    assembler.apply_boundaries(&problem, &left_bc, &right_bc, &mut a, &mut rhs);
                                          
     // solve system
-    let u = gauss_pp(assembler.a, assembler.rhs);
+    let u = gauss_pp(a, rhs);
 
     let mut l2_err_sq: f64 = 0.0;
     let npts: usize = 10;
@@ -68,7 +70,7 @@ fn main() {
 
         let x_l = assembler.x_dof[idx0];
         let x_r = assembler.x_dof[idx1];
-        let h = assembler.h_elem[k];
+        let h = assembler.elements[k].h_k;
 
         let ul = u[idx0];
         let ur = u[idx1];
