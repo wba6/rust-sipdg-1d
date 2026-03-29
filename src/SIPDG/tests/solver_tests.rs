@@ -30,8 +30,6 @@ where
     fn f(&self, x: f64) -> f64 { (self.f_fn)(x) }
 }
 
-/// Helper function to run the full solver pipeline and return the L2 error.
-/// Now accepts `penalty` to allow tuning for convergence tests.
 fn run_solver_and_compute_error(
     prob: &impl PdeProblem, 
     exact_soln: impl Fn(f64) -> f64, 

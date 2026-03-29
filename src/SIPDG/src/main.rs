@@ -44,7 +44,7 @@ fn main() {
     println!("x dof is \n {:?}", x_dof);
 
     let n_dof: usize = x_dof.len();
-    let mut assembler = pde::SipdgAssembler::new(h_elem, x_dof, 80.0);
+    let mut assembler = pde::SipdgAssembler::new(h_elem, x_dof, 20.0);
 
     // -------------------- Assemble system matrix ---------
     assembler.assemble_volume(&problem);

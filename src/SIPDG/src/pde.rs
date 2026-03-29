@@ -90,7 +90,6 @@ impl Interface {
 }
 
 /// PDE Problem definition: - (a(x) p'(x))' + q(x) p(x) = f(x)
-/// In the PDF, a(x) is assumed to be 1 and q(x) is 0.
 pub trait PdeProblem {
     fn a(&self, x: f64) -> f64;
     fn q(&self, x: f64) -> f64;
@@ -325,6 +324,7 @@ impl SipdgAssembler {
             let elem_m = &self.elements[k_minus_idx];
             let elem_p = &self.elements[k_plus_idx];
 
+            // Penality coefficient
             let h_avg = Self::average(elem_m.h_k, elem_p.h_k);
             let pen = self.sigma_0 * (a_val / h_avg);
 
