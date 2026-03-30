@@ -1,0 +1,4 @@
+[alias]
+time = "flamegraph --bin SIPDG -- parameters.txt"
+runr = "run --release -- parameters.txt"
+rundbg = "run -- parameters.txt"

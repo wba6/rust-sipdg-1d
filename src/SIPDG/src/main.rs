@@ -35,7 +35,7 @@ fn main() {
     let domain_b: f64 = 1.0;
 
     // number of elements
-    let num_elements: usize = 30;
+    let num_elements: usize = 3000;
 
     // Generate the mesh
     let (h_elem, x_dof) = generate_mesh(domain_a, domain_b, num_elements);
