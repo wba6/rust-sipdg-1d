@@ -1,7 +1,7 @@
 use mesh::generate_mesh;
 use problem_loader::load_problem_from_file;
 use pde::*;
-use util::gauss_pp::gauss_pp;
+use util::cg::cg;
 mod plotter;
 mod mesh;
 mod pde;
@@ -68,8 +68,9 @@ fn main() {
 
     assembler.apply_boundaries(&problem, &left_bc, &right_bc, &mut a, &mut rhs);
                                          
-    // solve system
-    let p = gauss_pp(a, rhs);
+    // solve system (Matrix-Free)
+    let op = assembler.matrix_free_op(&problem, &left_bc, &right_bc);
+    let p = cg(&op, &rhs, 1e-10, 10000);
 
     let mut l2_err_sq: f64 = 0.0;
     let quad_pts = util::quadrature::get_gauss_legendre_3pts();
