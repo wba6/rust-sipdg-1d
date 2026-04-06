@@ -1,4 +1,21 @@
 use plotters::prelude::*;
+use crate::pde::BasisOrder;
+
+fn evaluate_uh(xi: f64, local_u: &[f64], order: BasisOrder) -> f64 {
+    match order {
+        BasisOrder::Linear => {
+            let phi0 = 0.5 * (1.0 - xi);
+            let phi1 = 0.5 * (1.0 + xi);
+            local_u[0] * phi0 + local_u[1] * phi1
+        }
+        BasisOrder::Quadratic => {
+            let phi0 = 0.5 * xi * (xi - 1.0);
+            let phi1 = 1.0 - xi * xi;
+            let phi2 = 0.5 * xi * (xi + 1.0);
+            local_u[0] * phi0 + local_u[1] * phi1 + local_u[2] * phi2
+        }
+    }
+}
 
 /// Plots the SIPDG numerical solution against the exact solution.
 ///
@@ -7,11 +24,13 @@ use plotters::prelude::*;
 /// * `u` - Numerical solution vector.
 /// * `soln_function` - Closure representing the exact solution u(x).
 /// * `num_elements` - The number of elements in the mesh.
+/// * `order` - The basis order used.
 pub fn plot_results(
     x_dof: &[f64],
     u: &[f64],
     soln_function: impl Fn(f64) -> f64,
     num_elements: usize,
+    order: BasisOrder,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let root = BitMapBackend::new("solution_plot.png", (800, 600)).into_drawing_area();
     root.fill(&WHITE)?;
@@ -53,17 +72,22 @@ pub fn plot_results(
 
     // Plot SIPDG Numerical Solution
     // In DG, we plot each element as a separate segment because nodes are not shared.
+    let n_nodes = order.num_nodes();
+    let n_samples = 10;
     for i in 0..num_elements {
-        let idx_l = 2 * i;
-        let idx_r = 2 * i + 1;
+        let start_idx = i * n_nodes;
+        let local_u = &u[start_idx..start_idx + n_nodes];
+        let x_l = x_dof[start_idx];
+        let x_r = x_dof[start_idx + n_nodes - 1];
 
-        // Safety check for n_dof bounds (len is 2 * num_elements)
-        if idx_r < u.len() {
-            chart.draw_series(LineSeries::new(
-                vec![(x_dof[idx_l], u[idx_l]), (x_dof[idx_r], u[idx_r])],
-                &BLUE,
-            ))?;
-        }
+        chart.draw_series(LineSeries::new(
+            (0..n_samples).map(|j| {
+                let xi = -1.0 + 2.0 * (j as f64) / ((n_samples - 1) as f64);
+                let x = x_l + (xi + 1.0) * (x_r - x_l) / 2.0;
+                (x, evaluate_uh(xi, local_u, order))
+            }),
+            &BLUE,
+        ))?;
     }
 
     // Add a dummy entry to the legend for the Blue SIPDG lines

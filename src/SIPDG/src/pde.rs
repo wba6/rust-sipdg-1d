@@ -1,17 +1,30 @@
 use util::matrix::Matrix;
 use util::quadrature::get_gauss_legendre_3pts;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BasisOrder {
+    Linear,
+    Quadratic,
+}
+
+impl BasisOrder {
+    pub fn num_nodes(&self) -> usize {
+        match self {
+            BasisOrder::Linear => 2,
+            BasisOrder::Quadratic => 3,
+        }
+    }
+}
+
 pub struct Element {
-    // Global DoF index for the left node
-    pub n_left: usize,
-    // Global DoF index for the right node
-    pub n_right: usize,
-    // 2x2 Local stiffness/mass matrix
+    // Global DoF indices for the nodes
+    pub nodes: Vec<usize>,
+    // Local stiffness/mass matrix
     pub local_matrix: Matrix<f64>,
-    // 1x2 Local right-hand side
+    // Local right-hand side
     pub local_rhs: Matrix<f64>,
-    // Local solution p (populated after global solve)
-    pub local_p: Vec<f64>,
+    // Basis order
+    pub order: BasisOrder,
     // Affine translation data: stores element width (h_k) and midpoint (x_mid)
     pub h_k: f64,
     pub x_mid: f64,
@@ -21,14 +34,14 @@ pub struct Element {
 }
 
 impl Element {
-    pub fn new(n_left: usize, n_right: usize, x_l: f64, x_r: f64) -> Self {
+    pub fn new(nodes: Vec<usize>, x_l: f64, x_r: f64, order: BasisOrder) -> Self {
         let h_k = x_r - x_l;
+        let n_nodes = order.num_nodes();
         Self {
-            n_left,
-            n_right,
-            local_matrix: Matrix::new(2, 2, 0.0),
-            local_rhs: Matrix::new(1, 2, 0.0),
-            local_p: Vec::new(),
+            nodes,
+            local_matrix: Matrix::new(n_nodes, n_nodes, 0.0),
+            local_rhs: Matrix::new(1, n_nodes, 0.0),
+            order,
             h_k,
             x_mid: (x_l + x_r) / 2.0,
             x_l,
@@ -48,19 +61,35 @@ impl Element {
 
     /// Evaluates the i-th basis function at reference coordinate xi
     pub fn phi(&self, i: usize, xi: f64) -> f64 {
-        match i {
-            0 => 0.5 * (1.0 - xi),
-            1 => 0.5 * (1.0 + xi),
-            _ => panic!("Invalid basis function index"),
+        match self.order {
+            BasisOrder::Linear => match i {
+                0 => 0.5 * (1.0 - xi),
+                1 => 0.5 * (1.0 + xi),
+                _ => panic!("Invalid linear basis function index"),
+            },
+            BasisOrder::Quadratic => match i {
+                0 => 0.5 * xi * (xi - 1.0),
+                1 => 1.0 - xi * xi,
+                2 => 0.5 * xi * (xi + 1.0),
+                _ => panic!("Invalid quadratic basis function index"),
+            },
         }
     }
 
     /// Evaluates the physical derivative of the i-th basis function dphi_i/dx
-    pub fn dphi_dx(&self, i: usize) -> f64 {
-        let dphi_dxi = match i {
-            0 => -0.5,
-            1 => 0.5,
-            _ => panic!("Invalid basis function index"),
+    pub fn dphi_dx(&self, i: usize, xi: f64) -> f64 {
+        let dphi_dxi = match self.order {
+            BasisOrder::Linear => match i {
+                0 => -0.5,
+                1 => 0.5,
+                _ => panic!("Invalid linear basis function index"),
+            },
+            BasisOrder::Quadratic => match i {
+                0 => xi - 0.5,
+                1 => -2.0 * xi,
+                2 => xi + 0.5,
+                _ => panic!("Invalid quadratic basis function index"),
+            },
         };
         dphi_dxi / self.jacobian()
     }
@@ -73,18 +102,18 @@ pub struct Interface {
     pub k_minus: Option<usize>,
     // Index of the element to the right (K+)
     pub k_plus: Option<usize>,
-    // 4x4 matrix containing contributions to:
-    // [L-, R-, L+, R+] x [L-, R-, L+, R+]
+    // Interaction matrix for the interface
     pub matrix: Matrix<f64>,
 }
 
 impl Interface {
-    pub fn new(x_coord: f64, k_minus: Option<usize>, k_plus: Option<usize>) -> Self {
+    pub fn new(x_coord: f64, k_minus: Option<usize>, k_plus: Option<usize>, order: BasisOrder) -> Self {
+        let n_side = order.num_nodes();
         Self {
             x_coord,
             k_minus,
             k_plus,
-            matrix: Matrix::new(4, 4, 0.0),
+            matrix: Matrix::new(2 * n_side, 2 * n_side, 0.0),
         }
     }
 }
@@ -119,6 +148,7 @@ pub struct SipdgAssembler {
     pub interfaces: Vec<Interface>,
     pub sigma_0: f64, // Penalty parameter sigma^0 in PDF
     pub x_dof: Vec<f64>,
+    pub order: BasisOrder,
 }
 
 pub enum Side { Left, Right }
@@ -156,53 +186,46 @@ impl BoundaryCondition for DirichletBC {
             Side::Left => elem.x_l,
             Side::Right => elem.x_r,
         };
-        let idx = match side {
-            Side::Left => elem.n_left,
-            Side::Right => elem.n_right,
+        let xi = match side {
+            Side::Left => -1.0,
+            Side::Right => 1.0,
         };
-        let other_idx = match side {
-            Side::Left => elem.n_right,
-            Side::Right => elem.n_left,
+        let n = match side {
+            Side::Left => -1.0,
+            Side::Right => 1.0,
         };
 
         let a_val = prob.a(x);
         let pen = assembler.sigma_0 * (a_val / h);
+        let n_nodes = elem.order.num_nodes();
 
-        // Basis function gradients at the boundary
-        let grad_phi_i = match side { Side::Left => -1.0 / h, Side::Right => 1.0 / h };
-        let grad_phi_j = match side { Side::Left => 1.0 / h, Side::Right => -1.0 / h };
-
-        // For Dirichlet, [p] = -p^+ at x_0 and [p] = p^- at x_N (using PDF Eq 5 signs)
-        // However, we handle signs consistently: 
-        // LHS term: - {a p'} [v] - {a v'} [p] + (sigma/h) [p] [v]
-        // Left boundary (n=0): [v] = -v^+, {v'} = v'^+, [p] = -p^+, {p'} = p'^+
-        // Term 1: - p'^+ (-v^+) = p'^+ v^+
-        // Term 2: - v'^+ (-p^+) = v'^+ p^+
-        // Term 3: (sigma/h) (-p^+) (-v^+) = (sigma/h) p^+ v^+
-        
-        let n = match side { Side::Left => -1.0, Side::Right => 1.0 };
-        // Consistency & Symmetry: - a * grad_p * n * v - a * grad_v * n * p
-        // Penalty: (sigma/h) * p * v
-        
         // Matrix A contributions (LHS)
-        // (p_i, v_i)
-        a_global[(idx, idx)] += pen - 2.0 * a_val * grad_phi_i * n;
-        // (p_j, v_i)
-        a_global[(other_idx, idx)] -= a_val * grad_phi_j * n;
-        // (p_i, v_j)
-        a_global[(idx, other_idx)] -= a_val * grad_phi_j * n;
+        for i in 0..n_nodes {
+            let row_idx = elem.nodes[i];
+            let vi = elem.phi(i, xi);
+            let dvi_dx = elem.dphi_dx(i, xi);
 
-        // RHS F contributions (following Eq 18 signs)
-        // Left (n=0): + v'(x0) g1 - (sigma/h) g1 v(x0)
-        // Right (n=N): - v'(xN) g2 + (sigma/h) g2 v(xN)
-        match side {
-            Side::Left => {
-                f_global[(0, idx)] += self.value * (a_val * grad_phi_i - pen);
-                f_global[(0, other_idx)] += self.value * (a_val * grad_phi_j);
+            for j in 0..n_nodes {
+                let col_idx = elem.nodes[j];
+                let pj = elem.phi(j, xi);
+                let dpj_dx = elem.dphi_dx(j, xi);
+
+                // Terms: pen * p * v - a * grad_p * n * v - a * grad_v * n * p
+                a_global[(row_idx, col_idx)] += pen * pj * vi 
+                                              - a_val * dpj_dx * n * vi 
+                                              - a_val * dvi_dx * n * pj;
             }
-            Side::Right => {
-                f_global[(0, idx)] += self.value * (-a_val * grad_phi_i + pen);
-                f_global[(0, other_idx)] += self.value * (-a_val * grad_phi_j);
+
+            // RHS F contributions
+            match side {
+                Side::Left => {
+                    // + v'(x0) g1 - (sigma/h) g1 v(x0)
+                    f_global[(0, row_idx)] += self.value * (a_val * dvi_dx - pen * vi);
+                }
+                Side::Right => {
+                    // - v'(xN) g2 + (sigma/h) g2 v(xN)
+                    f_global[(0, row_idx)] += self.value * (-a_val * dvi_dx + pen * vi);
+                }
             }
         }
     }
@@ -223,36 +246,46 @@ impl BoundaryCondition for NeumannBC {
         f_global: &mut Matrix<f64>,
     ) {
         let elem = &assembler.elements[elem_idx];
-        let idx = match side {
-            Side::Left => elem.n_left,
-            Side::Right => elem.n_right,
+        let xi = match side {
+            Side::Left => -1.0,
+            Side::Right => 1.0,
         };
+        let n_nodes = elem.order.num_nodes();
 
-        // Neumann terms on RHS: - p'(x0)v(x0) at left, + p'(xN)v(xN) at right
-        // Since a(x)p'(x) = value, p'(x) = value / a(x)
-        match side {
-            Side::Left => {
-                f_global[(0, idx)] -= self.value;
-            }
-            Side::Right => {
-                f_global[(0, idx)] += self.value;
+        for i in 0..n_nodes {
+            let idx = elem.nodes[i];
+            let vi = elem.phi(i, xi);
+            // Neumann terms on RHS: - p'(x0)v(x0) at left, + p'(xN)v(xN) at right
+            // Since a(x)p'(x) = value, p'(x) = value / a(x)
+            match side {
+                Side::Left => {
+                    f_global[(0, idx)] -= self.value * vi;
+                }
+                Side::Right => {
+                    f_global[(0, idx)] += self.value * vi;
+                }
             }
         }
     }
 }
 
 impl SipdgAssembler {
-    pub fn new(h_elem: Vec<f64>, x_dof: Vec<f64>, sigma_0: f64) -> Self {
+    pub fn new(h_elem: Vec<f64>, x_dof: Vec<f64>, sigma_0: f64, order: BasisOrder) -> Self {
         let num_elements = h_elem.len();
+        let n_nodes = order.num_nodes();
         let mut elements = Vec::with_capacity(num_elements);
         for i in 0..num_elements {
-            elements.push(Element::new(2 * i, 2 * i + 1, x_dof[2 * i], x_dof[2 * i + 1]));
+            let mut nodes = Vec::with_capacity(n_nodes);
+            for j in 0..n_nodes {
+                nodes.push(i * n_nodes + j);
+            }
+            elements.push(Element::new(nodes, x_dof[i * n_nodes], x_dof[(i + 1) * n_nodes - 1], order));
         }
 
         let mut interfaces = Vec::with_capacity(num_elements - 1);
         for i in 0..num_elements - 1 {
-            let x_int = x_dof[2 * i + 1];
-            interfaces.push(Interface::new(x_int, Some(i), Some(i + 1)));
+            let x_int = x_dof[(i + 1) * n_nodes - 1];
+            interfaces.push(Interface::new(x_int, Some(i), Some(i + 1), order));
         }
 
         Self {
@@ -260,6 +293,7 @@ impl SipdgAssembler {
             interfaces,
             sigma_0,
             x_dof,
+            order,
         }
     }
 
@@ -276,21 +310,22 @@ impl SipdgAssembler {
     /// Assembles (Int a p' v') and (Int q p v) and (Int f v) using the reference element [-1, 1]
     pub fn assemble_volume(&mut self, prob: &impl PdeProblem) {
         let quad_pts = get_gauss_legendre_3pts();
+        let n_nodes = self.order.num_nodes();
 
         for elem in &mut self.elements {
             let det_j = elem.jacobian();
 
-            for i in 0..2 {
-                for j in 0..2 {
+            for i in 0..n_nodes {
+                for j in 0..n_nodes {
                     let mut stiffness = 0.0;
                     let mut mass = 0.0;
                     
-                    let dphi_i_dx = elem.dphi_dx(i);
-                    let dphi_j_dx = elem.dphi_dx(j);
-
                     for pt in &quad_pts {
                         let x = elem.map_to_physical(pt.xi);
                         let w = pt.weight;
+
+                        let dphi_i_dx = elem.dphi_dx(i, pt.xi);
+                        let dphi_j_dx = elem.dphi_dx(j, pt.xi);
 
                         // a(x) p' v'
                         stiffness += w * prob.a(x) * dphi_i_dx * dphi_j_dx;
@@ -314,6 +349,7 @@ impl SipdgAssembler {
     }
 
     pub fn assemble_interfaces(&mut self, prob: &impl PdeProblem) {
+        let n_side = self.order.num_nodes();
         for interface in &mut self.interfaces {
             let k_minus_idx = interface.k_minus.expect("Interface missing left element");
             let k_plus_idx = interface.k_plus.expect("Interface missing right element");
@@ -328,40 +364,31 @@ impl SipdgAssembler {
             let h_avg = Self::average(elem_m.h_k, elem_p.h_k);
             let pen = self.sigma_0 * (a_val / h_avg);
 
-            // Gradients at interface (evaluated on physical elements)
-            let g_m = [elem_m.dphi_dx(0), elem_m.dphi_dx(1)];
-            let g_p = [elem_p.dphi_dx(0), elem_p.dphi_dx(1)];
+            // Gradients and values at interface
+            // K- at its right end (xi=1)
+            let mut v_m = Vec::with_capacity(n_side);
+            let mut g_m = Vec::with_capacity(n_side);
+            for i in 0..n_side {
+                v_m.push(elem_m.phi(i, 1.0));
+                g_m.push(elem_m.dphi_dx(i, 1.0));
+            }
 
-            // Basis values at the interface:
-            // K- at its right end (xi=1): phi_0=0, phi_1=1
-            // K+ at its left end (xi=-1): phi_0=1, phi_1=0
-            let v_m = [0.0, 1.0];
-            let v_p = [1.0, 0.0];
+            // K+ at its left end (xi=-1)
+            let mut v_p = Vec::with_capacity(n_side);
+            let mut g_p = Vec::with_capacity(n_side);
+            for i in 0..n_side {
+                v_p.push(elem_p.phi(i, -1.0));
+                g_p.push(elem_p.dphi_dx(i, -1.0));
+            }
 
-            for i in 0..4 {
-                for j in 0..4 {
-                    // Extract basis values and derivatives for trial/test functions
-                    let (vi_m, vi_p) = match i {
-                        0 => (v_m[0], 0.0), 1 => (v_m[1], 0.0),
-                        2 => (0.0, v_p[0]), 3 => (0.0, v_p[1]),
-                        _ => unreachable!(),
-                    };
-                    let (dvi_m, dvi_p) = match i {
-                        0 => (g_m[0], 0.0), 1 => (g_m[1], 0.0),
-                        2 => (0.0, g_p[0]), 3 => (0.0, g_p[1]),
-                        _ => unreachable!(),
-                    };
+            for i in 0..2 * n_side {
+                for j in 0..2 * n_side {
+                    // i and j are indices into [nodes_m, nodes_p]
+                    let (vi_m, vi_p) = if i < n_side { (v_m[i], 0.0) } else { (0.0, v_p[i - n_side]) };
+                    let (dvi_m, dvi_p) = if i < n_side { (g_m[i], 0.0) } else { (0.0, g_p[i - n_side]) };
 
-                    let (pj_m, pj_p) = match j {
-                        0 => (v_m[0], 0.0), 1 => (v_m[1], 0.0),
-                        2 => (0.0, v_p[0]), 3 => (0.0, v_p[1]),
-                        _ => unreachable!(),
-                    };
-                    let (dpj_m, dpj_p) = match j {
-                        0 => (g_m[0], 0.0), 1 => (g_m[1], 0.0),
-                        2 => (0.0, g_p[0]), 3 => (0.0, g_p[1]),
-                        _ => unreachable!(),
-                    };
+                    let (pj_m, pj_p) = if j < n_side { (v_m[j], 0.0) } else { (0.0, v_p[j - n_side]) };
+                    let (dpj_m, dpj_p) = if j < n_side { (g_m[j], 0.0) } else { (0.0, g_p[j - n_side]) };
 
                     // Terms: pen [p] [v] - {a p'} [v] - {a v'} [p]
                     let jump_v = Self::jump(vi_m, vi_p);
@@ -378,35 +405,32 @@ impl SipdgAssembler {
     }
 
     pub fn assemble_to_global(&self) -> (Matrix<f64>, Matrix<f64>) {
-        let n_dof = self.elements.len() * 2;
+        let n_dof = self.x_dof.len();
         let mut a = Matrix::new(n_dof, n_dof, 0.0);
         let mut rhs = Matrix::new(1, n_dof, 0.0);
+        let n_nodes = self.order.num_nodes();
 
         // Volume terms
         for elem in &self.elements {
-            let indices = [elem.n_left, elem.n_right];
-            for i in 0..2 {
-                for j in 0..2 {
-                    a[(indices[i], indices[j])] += elem.local_matrix[(i, j)];
+            for i in 0..n_nodes {
+                for j in 0..n_nodes {
+                    a[(elem.nodes[i], elem.nodes[j])] += elem.local_matrix[(i, j)];
                 }
-                rhs[(0, indices[i])] += elem.local_rhs[(0, i)];
+                rhs[(0, elem.nodes[i])] += elem.local_rhs[(0, i)];
             }
         }
 
         // Interface terms
         for interface in &self.interfaces {
-            let k_minus = interface.k_minus.expect("Interface missing left element");
-            let k_plus = interface.k_plus.expect("Interface missing right element");
+            let k_minus_idx = interface.k_minus.expect("Interface missing left element");
+            let k_plus_idx = interface.k_plus.expect("Interface missing right element");
             
-            let nodes = [
-                self.elements[k_minus].n_left,
-                self.elements[k_minus].n_right,
-                self.elements[k_plus].n_left,
-                self.elements[k_plus].n_right,
-            ];
+            let mut nodes = Vec::with_capacity(2 * n_nodes);
+            nodes.extend(&self.elements[k_minus_idx].nodes);
+            nodes.extend(&self.elements[k_plus_idx].nodes);
 
-            for i in 0..4 {
-                for j in 0..4 {
+            for i in 0..2 * n_nodes {
+                for j in 0..2 * n_nodes {
                     a[(nodes[i], nodes[j])] += interface.matrix[(i, j)];
                 }
             }
