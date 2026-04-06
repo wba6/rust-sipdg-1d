@@ -3,3 +3,6 @@ members = [
 "src/SIPDG",
 "src/util"
 ]
+
+[profile.release]
+debug = true
