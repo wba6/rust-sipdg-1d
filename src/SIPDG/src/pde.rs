@@ -384,7 +384,7 @@ impl SipdgAssembler {
         let quad_pts = get_gauss_legendre_3pts();
         let n_nodes = self.order.num_nodes();
 
-        for elem in &mut self.elements {
+        self.elements.par_iter_mut().for_each(|elem| {
             let det_j = elem.jacobian();
 
             for i in 0..n_nodes {
@@ -417,20 +417,21 @@ impl SipdgAssembler {
                 }
                 elem.local_rhs[(0, i)] = load * det_j;
             }
-        }
+        });
     }
 
     pub fn assemble_interfaces(&mut self, prob: &impl PdeProblem) {
         let n_side = self.order.num_nodes();
-        for interface in &mut self.interfaces {
+        let elements = &self.elements;
+        self.interfaces.par_iter_mut().for_each(|interface| {
             let k_minus_idx = interface.k_minus.expect("Interface missing left element");
             let k_plus_idx = interface.k_plus.expect("Interface missing right element");
 
             let x_int = interface.x_coord;
             let a_val = prob.a(x_int);
 
-            let elem_m = &self.elements[k_minus_idx];
-            let elem_p = &self.elements[k_plus_idx];
+            let elem_m = &elements[k_minus_idx];
+            let elem_p = &elements[k_plus_idx];
 
             // Penality coefficient
             let h_avg = Self::average(elem_m.h_k, elem_p.h_k);
@@ -473,7 +474,7 @@ impl SipdgAssembler {
                                               - a_val * avg_dv * jump_p;
                 }
             }
-        }
+        });
     }
 
     pub fn assemble_to_global(&self) -> (Matrix<f64>, Matrix<f64>) {

@@ -72,22 +72,24 @@ fn main() {
     let op = assembler.matrix_free_op(&problem, &left_bc, &right_bc);
     let p = cg(&op, &rhs, 1e-10, 10000);
 
-    let mut l2_err_sq: f64 = 0.0;
     let quad_pts = util::quadrature::get_gauss_legendre_3pts();
+    let n_nodes = order.num_nodes();
 
-    for elem in &assembler.elements {
+    let l2_err_sq: f64 = assembler.elements.par_iter().map(|elem| {
         let det_j = elem.jacobian();
+        let mut local_err_sq = 0.0;
         for pt in &quad_pts {
             let x = elem.map_to_physical(pt.xi);
             let mut u_h = 0.0;
-            for i in 0..order.num_nodes() {
+            for i in 0..n_nodes {
                 u_h += p[elem.nodes[i]] * elem.phi(i, pt.xi);
             }
             let u_ex = soln_function(x);
             let err = u_h - u_ex;
-            l2_err_sq += pt.weight * err * err * det_j;
+            local_err_sq += pt.weight * err * err * det_j;
         }
-    }
+        local_err_sq
+    }).sum();
 
     let l2_error = l2_err_sq.sqrt();
     println!("Total DoFs: {}", n_dof);
