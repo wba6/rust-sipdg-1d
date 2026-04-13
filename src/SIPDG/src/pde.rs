@@ -1,6 +1,7 @@
 use util::matrix::Matrix;
 use util::quadrature::get_gauss_legendre_3pts;
 use util::cg::LinearOperator;
+use rayon::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BasisOrder {
@@ -120,7 +121,7 @@ impl Interface {
 }
 
 /// PDE Problem definition: - (a(x) p'(x))' + q(x) p(x) = f(x)
-pub trait PdeProblem {
+pub trait PdeProblem: Sync {
     fn a(&self, x: f64) -> f64;
     fn q(&self, x: f64) -> f64;
     fn f(&self, x: f64) -> f64;
