@@ -1,16 +1,16 @@
 // src/SIPDG/tests/solver_tests.rs
 
-use SIPDG::{PdeProblem, SipdgAssembler, DirichletBC, generate_mesh, pde::BasisOrder};
+use sipdg::{PdeProblem, SipdgAssembler, DirichletBC, generate_mesh, pde::BasisOrder};
 use util::cg::cg;
 use std::f64::consts::PI;
 
 /// A flexible problem struct that lets us define a, q, f, and exact_p using closures.
 struct TestProblem<A, Q, F, P>
 where
-    A: Fn(f64) -> f64,
-    Q: Fn(f64) -> f64,
-    F: Fn(f64) -> f64,
-    P: Fn(f64) -> f64,
+    A: Fn(f64) -> f64 + Sync,
+    Q: Fn(f64) -> f64 + Sync,
+    F: Fn(f64) -> f64 + Sync,
+    P: Fn(f64) -> f64 + Sync,
 {
     a_fn: A,
     q_fn: Q,
@@ -20,10 +20,10 @@ where
 
 impl<A, Q, F, P> PdeProblem for TestProblem<A, Q, F, P>
 where
-    A: Fn(f64) -> f64,
-    Q: Fn(f64) -> f64,
-    F: Fn(f64) -> f64,
-    P: Fn(f64) -> f64,
+    A: Fn(f64) -> f64 + Sync,
+    Q: Fn(f64) -> f64 + Sync,
+    F: Fn(f64) -> f64 + Sync,
+    P: Fn(f64) -> f64 + Sync,
 {
     fn a(&self, x: f64) -> f64 { (self.a_fn)(x) }
     fn q(&self, x: f64) -> f64 { (self.q_fn)(x) }

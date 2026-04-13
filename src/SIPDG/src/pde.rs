@@ -293,6 +293,7 @@ impl BoundaryCondition for DirichletBC {
 
 /// Neumann Boundary Condition: a(x) p'(x) = value
 /// Formulation follows PDF Equation (27)
+#[allow(dead_code)]
 pub struct NeumannBC { pub value: f64 }
 
 impl BoundaryCondition for NeumannBC {

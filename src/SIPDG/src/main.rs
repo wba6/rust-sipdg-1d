@@ -2,6 +2,7 @@ use mesh::generate_mesh;
 use problem_loader::load_problem_from_file;
 use pde::*;
 use util::cg::cg;
+use rayon::prelude::*;
 mod plotter;
 mod mesh;
 mod pde;
