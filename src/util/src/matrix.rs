@@ -63,6 +63,19 @@ impl Matrix<f64> {
     pub fn zeros(rows: usize, cols: usize) -> Self {
         Self::new(rows, cols, 0.0)
     }
+
+    /// Multiply matrix by a vector
+    pub fn multiply_vec(&self, v: &[f64]) -> Vec<f64> {
+        assert_eq!(self.cols, v.len(), "Matrix columns must match vector length");
+        
+        self.data.chunks_exact(self.cols)
+            .map(|row| {
+                row.iter().zip(v.iter())
+                    .map(|(a, b)| a * b)
+                    .sum()
+            })
+            .collect()
+    }
 }
 
 impl<T> Index<(usize, usize)> for Matrix<T> {

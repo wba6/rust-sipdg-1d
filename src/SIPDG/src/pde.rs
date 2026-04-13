@@ -1,5 +1,6 @@
 use util::matrix::Matrix;
 use util::quadrature::get_gauss_legendre_3pts;
+use util::cg::LinearOperator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BasisOrder {
@@ -164,6 +165,17 @@ pub trait BoundaryCondition {
         a_global: &mut Matrix<f64>,
         f_global: &mut Matrix<f64>,
     );
+
+    /// Matrix-free contribution to A*v
+    fn apply_matrix_free(
+        &self,
+        side: Side,
+        elem_idx: usize,
+        assembler: &SipdgAssembler,
+        prob: &impl PdeProblem,
+        v_in: &[f64],
+        v_out: &mut [f64],
+    );
 }
 
 /// Dirichlet Boundary Condition: p(x) = value
@@ -229,6 +241,53 @@ impl BoundaryCondition for DirichletBC {
             }
         }
     }
+
+    fn apply_matrix_free(
+        &self,
+        side: Side,
+        elem_idx: usize,
+        assembler: &SipdgAssembler,
+        prob: &impl PdeProblem,
+        v_in: &[f64],
+        v_out: &mut [f64],
+    ) {
+        let elem = &assembler.elements[elem_idx];
+        let h = elem.h_k;
+        let x = match side {
+            Side::Left => elem.x_l,
+            Side::Right => elem.x_r,
+        };
+        let xi = match side {
+            Side::Left => -1.0,
+            Side::Right => 1.0,
+        };
+        let n = match side {
+            Side::Left => -1.0,
+            Side::Right => 1.0,
+        };
+
+        let a_val = prob.a(x);
+        let pen = assembler.sigma_0 * (a_val / h);
+        let n_nodes = elem.order.num_nodes();
+
+        for i in 0..n_nodes {
+            let row_idx = elem.nodes[i];
+            let vi = elem.phi(i, xi);
+            let dvi_dx = elem.dphi_dx(i, xi);
+
+            let mut sum = 0.0;
+            for j in 0..n_nodes {
+                let col_idx = elem.nodes[j];
+                let pj = elem.phi(j, xi);
+                let dpj_dx = elem.dphi_dx(j, xi);
+
+                sum += (pen * pj * vi 
+                      - a_val * dpj_dx * n * vi 
+                      - a_val * dvi_dx * n * pj) * v_in[col_idx];
+            }
+            v_out[row_idx] += sum;
+        }
+    }
 }
 
 /// Neumann Boundary Condition: a(x) p'(x) = value
@@ -266,6 +325,18 @@ impl BoundaryCondition for NeumannBC {
                 }
             }
         }
+    }
+
+    fn apply_matrix_free(
+        &self,
+        _side: Side,
+        _elem_idx: usize,
+        _assembler: &SipdgAssembler,
+        _prob: &impl PdeProblem,
+        _v_in: &[f64],
+        _v_out: &mut [f64],
+    ) {
+        // Neumann BC only affects RHS, not the operator A
     }
 }
 
@@ -425,7 +496,7 @@ impl SipdgAssembler {
             let k_minus_idx = interface.k_minus.expect("Interface missing left element");
             let k_plus_idx = interface.k_plus.expect("Interface missing right element");
             
-            let mut nodes = Vec::with_capacity(2 * n_nodes);
+            let mut nodes = Vec::<usize>::with_capacity(2 * n_nodes);
             nodes.extend(&self.elements[k_minus_idx].nodes);
             nodes.extend(&self.elements[k_plus_idx].nodes);
 
@@ -466,5 +537,106 @@ impl SipdgAssembler {
             a_global,
             f_global
         );
+    }
+
+    pub fn matrix_free_op<'a, P, B1, B2>(
+        &'a self,
+        prob: &'a P,
+        left_bc: &'a B1,
+        right_bc: &'a B2,
+    ) -> SipdgOperator<'a, P, B1, B2>
+    where
+        P: PdeProblem,
+        B1: BoundaryCondition,
+        B2: BoundaryCondition,
+    {
+        SipdgOperator {
+            assembler: self,
+            prob,
+            left_bc,
+            right_bc,
+        }
+    }
+}
+
+pub struct SipdgOperator<'a, P, B1, B2>
+where
+    P: PdeProblem,
+    B1: BoundaryCondition,
+    B2: BoundaryCondition,
+{
+    assembler: &'a SipdgAssembler,
+    prob: &'a P,
+    left_bc: &'a B1,
+    right_bc: &'a B2,
+}
+
+impl<'a, P, B1, B2> LinearOperator for SipdgOperator<'a, P, B1, B2>
+where
+    P: PdeProblem,
+    B1: BoundaryCondition,
+    B2: BoundaryCondition,
+{
+    fn columns(&self) -> usize {
+        self.assembler.x_dof.len()
+    }
+
+    fn multiply_vec(&self, v: &[f64]) -> Vec<f64> {
+        let n = self.columns();
+        let mut out = vec![0.0; n];
+        let n_nodes = self.assembler.order.num_nodes();
+
+        // Volume contributions
+        for elem in &self.assembler.elements {
+            for i in 0..n_nodes {
+                let row_idx = elem.nodes[i];
+                let mut sum = 0.0;
+                for j in 0..n_nodes {
+                    let col_idx = elem.nodes[j];
+                    sum += elem.local_matrix[(i, j)] * v[col_idx];
+                }
+                out[row_idx] += sum;
+            }
+        }
+
+        // Interface contributions
+        for interface in &self.assembler.interfaces {
+            let k_m = interface.k_minus.expect("Interface missing left element");
+            let k_p = interface.k_plus.expect("Interface missing right element");
+
+            let mut nodes = Vec::<usize>::with_capacity(2 * n_nodes);
+            nodes.extend(&self.assembler.elements[k_m].nodes);
+            nodes.extend(&self.assembler.elements[k_p].nodes);
+
+            for i in 0..2 * n_nodes {
+                let row_idx = nodes[i];
+                let mut sum = 0.0;
+                for j in 0..2 * n_nodes {
+                    let col_idx = nodes[j];
+                    sum += interface.matrix[(i, j)] * v[col_idx];
+                }
+                out[row_idx] += sum;
+            }
+        }
+
+        // Boundary contributions
+        self.left_bc.apply_matrix_free(
+            Side::Left,
+            0,
+            self.assembler,
+            self.prob,
+            v,
+            &mut out,
+        );
+        self.right_bc.apply_matrix_free(
+            Side::Right,
+            self.assembler.elements.len() - 1,
+            self.assembler,
+            self.prob,
+            v,
+            &mut out,
+        );
+
+        out
     }
 }

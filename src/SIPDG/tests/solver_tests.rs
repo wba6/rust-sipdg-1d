@@ -1,7 +1,7 @@
 // src/SIPDG/tests/solver_tests.rs
 
-use SIPDG::{PdeProblem, SipdgAssembler, DirichletBC, generate_mesh};
-use util::gauss_pp::gauss_pp;
+use SIPDG::{PdeProblem, SipdgAssembler, DirichletBC, generate_mesh, pde::BasisOrder};
+use util::cg::cg;
 use std::f64::consts::PI;
 
 /// A flexible problem struct that lets us define a, q, f, and exact_p using closures.
@@ -36,11 +36,12 @@ fn run_solver_and_compute_error(
     num_elements: usize,
     penalty: f64
 ) -> f64 {
+    let order = BasisOrder::Linear;
     // Generate Mesh
-    let (h_elem, x_dof) = generate_mesh(0.0, 1.0, num_elements);
+    let (h_elem, x_dof) = generate_mesh(0.0, 1.0, num_elements, order);
     
     // Assemble (using the provided penalty parameter)
-    let mut assembler = SipdgAssembler::new(h_elem.clone(), x_dof.clone(), penalty);
+    let mut assembler = SipdgAssembler::new(h_elem.clone(), x_dof.clone(), penalty, order);
     assembler.assemble_volume(prob);
     assembler.assemble_interfaces(prob);
 
@@ -50,8 +51,9 @@ fn run_solver_and_compute_error(
     let bc = DirichletBC { value: 0.0 };
     assembler.apply_boundaries(prob, &bc, &bc, &mut a, &mut rhs);
 
-    // Solve
-    let p = gauss_pp(a, rhs);
+    // Solve (Matrix-Free)
+    let op = assembler.matrix_free_op(prob, &bc, &bc);
+    let p = cg(&op, &rhs, 1e-10, 10000);
 
     // Compute L2 Error (Trapezoidal rule)
     let mut l2_err_sq = 0.0;
