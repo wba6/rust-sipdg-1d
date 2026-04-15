@@ -33,10 +33,20 @@ fn main() {
 
     // Abstracted loading
     let problem = load_problem_from_file(&args.path);
-    let soln_function = |x: f64| (x * (1.0 - x)) / 2.0;
     
-    println!("Loaded Parameters: a={}, q={}, f={}", 
-             problem.a_val, problem.q_val, problem.f_val);
+    // Default solution for the full SL problem default: a=1, q=1, f=(pi^2+1)sin(pi*x)
+    let is_sl_default = problem.a_val == 1.0 && problem.q_val == 1.0 && problem.f_val == 1.0;
+    
+    let soln_function: Box<dyn Fn(f64) -> f64 + Send + Sync> = if is_sl_default {
+        println!("Using SL Default Exact Solution: sin(pi * x)");
+        Box::new(|x: f64| (std::f64::consts::PI * x).sin())
+    } else {
+        println!("Using Poisson Exact Solution: x*(1-x)/2");
+        Box::new(|x: f64| (x * (1.0 - x)) / 2.0)
+    };
+    
+    println!("Loaded Parameters: a={}, q={}, f={}, num_elements={}, sigma_0={}", 
+             problem.a_val, problem.q_val, problem.f_val, problem.num_elements, problem.sigma_0);
     println!("Basis Order: {:?}", order);
     println!("Begin SIPDG Process");
 
@@ -46,7 +56,7 @@ fn main() {
     let domain_b: f64 = 1.0;
 
     // number of elements
-    let num_elements: usize = 3000;
+    let num_elements = problem.num_elements;
 
     // Generate the mesh
     let (h_elem, x_dof) = generate_mesh(domain_a, domain_b, num_elements, order);
@@ -55,7 +65,7 @@ fn main() {
     // println!("x dof is \n {:?}", x_dof);
 
     let n_dof: usize = x_dof.len();
-    let mut assembler = pde::SipdgAssembler::new(h_elem, x_dof, 20.0, order);
+    let mut assembler = pde::SipdgAssembler::new(h_elem, x_dof, problem.sigma_0, order);
 
     // -------------------- Assemble system matrix ---------
     assembler.assemble_volume(&problem);

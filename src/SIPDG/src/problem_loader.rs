@@ -22,6 +22,8 @@ pub fn load_problem_from_file(path: &Path) -> ConfigurableProblem {
                     "a" | "p" => prob.a_val = val,
                     "q" => prob.q_val = val,
                     "f" => prob.f_val = val,
+                    "num_elements" => prob.num_elements = val as usize,
+                    "sigma_0" | "penalty" => prob.sigma_0 = val,
                     _ => println!("Warning: Unknown parameter {}", parts[0]),
                 }
             }

@@ -131,18 +131,34 @@ pub struct ConfigurableProblem {
     pub a_val: f64,
     pub q_val: f64,
     pub f_val: f64,
+    pub num_elements: usize,
+    pub sigma_0: f64,
 }
 
 impl Default for ConfigurableProblem {
     fn default() -> Self {
-        Self { a_val: 1.0, q_val: 0.0, f_val: 1.0 }
+        Self { 
+            a_val: 1.0, 
+            q_val: 1.0, 
+            f_val: 1.0, // Use 1.0 as a flag for default non-constant f(x) or just a constant
+            num_elements: 3000,
+            sigma_0: 20.0,
+        }
     }
 }
 
 impl PdeProblem for ConfigurableProblem {
     fn a(&self, _x: f64) -> f64 { self.a_val }
     fn q(&self, _x: f64) -> f64 { self.q_val }
-    fn f(&self, _x: f64) -> f64 { self.f_val }
+    fn f(&self, x: f64) -> f64 { 
+        // If q=1, a=1 and f=1, we assume the user wants the "full" SL default: (pi^2 + 1) * sin(pi * x)
+        if self.a_val == 1.0 && self.q_val == 1.0 && self.f_val == 1.0 {
+            use std::f64::consts::PI;
+            (PI.powi(2) + 1.0) * (PI * x).sin()
+        } else {
+            self.f_val 
+        }
+    }
 }
 
 pub struct SipdgAssembler {
@@ -585,12 +601,35 @@ where
     }
 
     fn multiply_vec(&self, v: &[f64]) -> Vec<f64> {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
         let n = self.columns();
-        let mut out = vec![0.0; n];
+        let out_atomic: Vec<AtomicU64> = (0..n)
+            .map(|_| AtomicU64::new(0.0f64.to_bits()))
+            .collect();
         let n_nodes = self.assembler.order.num_nodes();
 
+        // Helper to add f64 to AtomicU64
+        let add_to_atomic = |idx: usize, val: f64| {
+            let mut current_bits = out_atomic[idx].load(Ordering::Relaxed);
+            loop {
+                let current_val = f64::from_bits(current_bits);
+                let new_val = current_val + val;
+                let new_bits = new_val.to_bits();
+                match out_atomic[idx].compare_exchange_weak(
+                    current_bits,
+                    new_bits,
+                    Ordering::SeqCst,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(actual_bits) => current_bits = actual_bits,
+                }
+            }
+        };
+
         // Volume contributions
-        for elem in &self.assembler.elements {
+        self.assembler.elements.par_iter().for_each(|elem| {
             for i in 0..n_nodes {
                 let row_idx = elem.nodes[i];
                 let mut sum = 0.0;
@@ -598,12 +637,12 @@ where
                     let col_idx = elem.nodes[j];
                     sum += elem.local_matrix[(i, j)] * v[col_idx];
                 }
-                out[row_idx] += sum;
+                add_to_atomic(row_idx, sum);
             }
-        }
+        });
 
         // Interface contributions
-        for interface in &self.assembler.interfaces {
+        self.assembler.interfaces.par_iter().for_each(|interface| {
             let k_m = interface.k_minus.expect("Interface missing left element");
             let k_p = interface.k_plus.expect("Interface missing right element");
 
@@ -618,18 +657,19 @@ where
                     let col_idx = nodes[j];
                     sum += interface.matrix[(i, j)] * v[col_idx];
                 }
-                out[row_idx] += sum;
+                add_to_atomic(row_idx, sum);
             }
-        }
+        });
 
-        // Boundary contributions
+        // Boundary contributions (typically small, can stay serial or use atomics)
+        let mut b_out = vec![0.0; n];
         self.left_bc.apply_matrix_free(
             Side::Left,
             0,
             self.assembler,
             self.prob,
             v,
-            &mut out,
+            &mut b_out,
         );
         self.right_bc.apply_matrix_free(
             Side::Right,
@@ -637,9 +677,14 @@ where
             self.assembler,
             self.prob,
             v,
-            &mut out,
+            &mut b_out,
         );
 
-        out
+        // Combine atomics and boundary
+        out_atomic
+            .into_par_iter()
+            .enumerate()
+            .map(|(i, val)| f64::from_bits(val.load(Ordering::SeqCst)) + b_out[i])
+            .collect()
     }
 }
