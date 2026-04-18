@@ -405,7 +405,8 @@ impl SipdgAssembler {
             let det_j = elem.jacobian();
 
             for i in 0..n_nodes {
-                for j in 0..n_nodes {
+                // Symmetry optimization: Only compute j >= i
+                for j in i..n_nodes {
                     let mut stiffness = 0.0;
                     let mut mass = 0.0;
                     
@@ -423,7 +424,11 @@ impl SipdgAssembler {
                         mass += w * prob.q(x) * elem.phi(i, pt.xi) * elem.phi(j, pt.xi);
                     }
 
-                    elem.local_matrix[(i, j)] = (stiffness + mass) * det_j;
+                    let val = (stiffness + mass) * det_j;
+                    elem.local_matrix[(i, j)] = val;
+                    if i != j {
+                        elem.local_matrix[(j, i)] = val;
+                    }
                 }
 
                 // f(x) v
@@ -472,7 +477,7 @@ impl SipdgAssembler {
             }
 
             for i in 0..2 * n_side {
-                for j in 0..2 * n_side {
+                for j in i..2 * n_side {
                     // i and j are indices into [nodes_m, nodes_p]
                     let (vi_m, vi_p) = if i < n_side { (v_m[i], 0.0) } else { (0.0, v_p[i - n_side]) };
                     let (dvi_m, dvi_p) = if i < n_side { (g_m[i], 0.0) } else { (0.0, g_p[i - n_side]) };
@@ -486,9 +491,14 @@ impl SipdgAssembler {
                     let avg_dp = Self::average(dpj_m, dpj_p);
                     let avg_dv = Self::average(dvi_m, dvi_p);
 
-                    interface.matrix[(i, j)] += pen * jump_p * jump_v
-                                              - a_val * avg_dp * jump_v
-                                              - a_val * avg_dv * jump_p;
+                    let val = pen * jump_p * jump_v
+                            - a_val * avg_dp * jump_v
+                            - a_val * avg_dv * jump_p;
+                    
+                    interface.matrix[(i, j)] += val;
+                    if i != j {
+                        interface.matrix[(j, i)] += val;
+                    }
                 }
             }
         });
