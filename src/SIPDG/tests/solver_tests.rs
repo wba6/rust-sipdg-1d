@@ -118,28 +118,94 @@ fn test_exact_linear_solution() {
 }
 
 #[test]
-fn test_convergence_poisson_sine() {
-    // Problem: -p'' = f
-    // Target: p(x) = sin(pi * x)
-    // f(x) = pi^2 * sin(pi * x)
-    
+fn test_convergence_rates() {
     let prob = TestProblem {
         a_fn: |_| 1.0,
-        q_fn: |_| 0.0,
-        f_fn: |x| PI.powi(2) * (PI * x).sin(),
+        q_fn: |_| 1.0,
+        f_fn: |x| (PI.powi(2) + 1.0) * (PI * x).sin(),
         p_exact: |x| (PI * x).sin(),
     };
 
-    let penalty = 10.0;
+    let penalty = 20.0;
+    let sizes = [10, 20, 40];
 
-    let err_coarse = run_solver_and_compute_error(&prob, &prob.p_exact, 10, penalty);
-    let err_fine = run_solver_and_compute_error(&prob, &prob.p_exact, 20, penalty);
+    // Linear
+    let mut errors_p1 = Vec::new();
+    for &n in &sizes {
+        errors_p1.push(run_solver_and_compute_error_with_order(&prob, &prob.p_exact, n, penalty, BasisOrder::Linear));
+    }
+    
+    for i in 1..errors_p1.len() {
+        let rate = (errors_p1[i-1] / errors_p1[i]).log2();
+        assert!(rate > 1.9, "Linear convergence rate too low: {:.2}", rate);
+    }
 
-    println!("Sine Test: Coarse Err = {:.4e}, Fine Err = {:.4e}", err_coarse, err_fine);
+    // Quadratic
+    let mut errors_p2 = Vec::new();
+    for &n in &sizes {
+        errors_p2.push(run_solver_and_compute_error_with_order(&prob, &prob.p_exact, n, penalty, BasisOrder::Quadratic));
+    }
+    
+    for i in 1..errors_p2.len() {
+        let rate = (errors_p2[i-1] / errors_p2[i]).log2();
+        assert!(rate > 2.8, "Quadratic convergence rate too low: {:.2}", rate);
+    }
+}
 
-    // For linear elements, L2 error is O(h^2). Doubling elements = 1/4 error.
-    let rate = err_coarse / err_fine;
-    assert!(rate > 3.0, "Convergence rate too slow! Expected ~4.0, got {:.2}", rate);
+fn run_solver_and_compute_error_with_order(
+    prob: &impl PdeProblem, 
+    exact_soln: impl Fn(f64) -> f64, 
+    num_elements: usize,
+    penalty: f64,
+    order: BasisOrder
+) -> f64 {
+    let (h_elem, x_dof) = generate_mesh(0.0, 1.0, num_elements, order);
+    let mut assembler = SipdgAssembler::new(h_elem.clone(), x_dof.clone(), penalty, order);
+    assembler.assemble_volume(prob);
+    assembler.assemble_interfaces(prob);
+
+    let (mut a, mut rhs) = assembler.assemble_to_global();
+    let bc = DirichletBC { value: 0.0 };
+    assembler.apply_boundaries(prob, &bc, &bc, &mut a, &mut rhs);
+
+    let op = assembler.matrix_free_op(prob, &bc, &bc);
+    let p = cg(&op, &rhs, 1e-12, 10000);
+
+    // Compute L2 Error (Trapezoidal rule used in tests for simplicity, 
+    // but with enough points it should be fine for rate verification)
+    let mut l2_err_sq = 0.0;
+    let npts = 20;
+
+    for k in 0..num_elements {
+        let n_local = order.num_nodes();
+        let x_l = assembler.elements[k].x_l;
+        let x_r = assembler.elements[k].x_r;
+        let h = x_r - x_l;
+
+        let step = h / ((npts - 1) as f64);
+        
+        let get_ph = |x: f64| {
+            let xi = (x - assembler.elements[k].x_mid) / (h / 2.0);
+            let mut val = 0.0;
+            for i in 0..n_local {
+                val += p[assembler.elements[k].nodes[i]] * assembler.elements[k].phi(i, xi);
+            }
+            val
+        };
+
+        let mut prev_x = x_l;
+        let mut prev_err2 = (get_ph(prev_x) - exact_soln(prev_x)).powi(2);
+
+        for i in 1..npts {
+            let x = x_l + step * (i as f64);
+            let err2 = (get_ph(x) - exact_soln(x)).powi(2);
+            l2_err_sq += 0.5 * (x - prev_x) * (prev_err2 + err2);
+            prev_x = x;
+            prev_err2 = err2;
+        }
+    }
+
+    l2_err_sq.sqrt()
 }
 
 #[test]
