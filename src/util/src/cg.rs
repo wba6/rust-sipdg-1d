@@ -1,4 +1,5 @@
 use crate::matrix::Matrix;
+use rayon::prelude::*;
 
 pub trait LinearOperator {
     fn columns(&self) -> usize;
@@ -21,9 +22,9 @@ pub fn cg<A: LinearOperator>(a: &A, f: &Matrix<f64>, tol: f64, max_iter: usize) 
 
     // Convert F (either 1xn or nx1) into a vector b of length n
     let b: Vec<f64> = if f.rows() == 1 && f.cols() == n {
-        (0..n).map(|i| f[(0, i)]).collect()
+        (0..n).into_par_iter().map(|i| f[(0, i)]).collect()
     } else if f.cols() == 1 && f.rows() == n {
-        (0..n).map(|i| f[(i, 0)]).collect()
+        (0..n).into_par_iter().map(|i| f[(i, 0)]).collect()
     } else {
         panic!("F must be 1×n or n×1 (got {}×{})", f.rows(), f.cols());
     };
@@ -62,14 +63,14 @@ pub fn cg<A: LinearOperator>(a: &A, f: &Matrix<f64>, tol: f64, max_iter: usize) 
         let alpha = r_dot_r / p_ap;
         
         // x_{k+1} = x_k + alpha * p
-        for i in 0..n {
-            x[i] += alpha * p[i];
-        }
+        x.par_iter_mut().zip(p.par_iter()).for_each(|(xi, pi)| {
+            *xi += alpha * pi;
+        });
         
         // r_{k+1} = r_k - alpha * A * p
-        for i in 0..n {
-            r[i] -= alpha * ap[i];
-        }
+        r.par_iter_mut().zip(ap.par_iter()).for_each(|(ri, api)| {
+            *ri -= alpha * api;
+        });
         
         let r_dot_r_new = dot(&r, &r);
         
@@ -81,9 +82,9 @@ pub fn cg<A: LinearOperator>(a: &A, f: &Matrix<f64>, tol: f64, max_iter: usize) 
         let beta = r_dot_r_new / r_dot_r;
         
         // p_{k+1} = r_{k+1} + beta * p_k
-        for i in 0..n {
-            p[i] = r[i] + beta * p[i];
-        }
+        p.par_iter_mut().zip(r.par_iter()).for_each(|(pi, ri)| {
+            *pi = *ri + beta * *pi;
+        });
         
         r_dot_r = r_dot_r_new;
     }
@@ -92,5 +93,5 @@ pub fn cg<A: LinearOperator>(a: &A, f: &Matrix<f64>, tol: f64, max_iter: usize) 
 }
 
 fn dot(a: &[f64], b: &[f64]) -> f64 {
-    a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+    a.par_iter().zip(b.par_iter()).map(|(x, y)| x * y).sum()
 }

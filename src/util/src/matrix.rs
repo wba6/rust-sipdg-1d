@@ -68,7 +68,9 @@ impl Matrix<f64> {
     pub fn multiply_vec(&self, v: &[f64]) -> Vec<f64> {
         assert_eq!(self.cols, v.len(), "Matrix columns must match vector length");
         
-        self.data.chunks_exact(self.cols)
+        use rayon::prelude::*;
+
+        self.data.par_chunks_exact(self.cols)
             .map(|row| {
                 row.iter().zip(v.iter())
                     .map(|(a, b)| a * b)
