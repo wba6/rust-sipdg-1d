@@ -15,9 +15,6 @@ use std::path::PathBuf;
 struct Cli {
     /// The path to the file to read
     path: PathBuf,
-    /// The basis function degree (1 for linear, 2 for quadratic)
-    #[arg(short, long, default_value_t = 1)]
-    degree: usize,
 }
 
 fn main() {
@@ -25,15 +22,11 @@ fn main() {
     // TODO Add problem stmt
     let args = Cli::parse();
 
-    let order = match args.degree {
-        1 => BasisOrder::Linear,
-        2 => BasisOrder::Quadratic,
-        _ => panic!("Unsupported degree: {}. Use 1 or 2.", args.degree),
-    };
-
     // Abstracted loading
     let problem = load_problem_from_file(&args.path);
     
+    let order = problem.order;
+
     // Exact solution for the problem: - (a p')' + q p = f 
     let soln_function: Box<dyn Fn(f64) -> f64 + Send + Sync> = match problem.problem_type {
         ProblemType::Sine => {
@@ -88,7 +81,7 @@ fn main() {
     assembler.assemble_volume(&problem);
     assembler.assemble_interfaces(&problem);
 
-    let (mut a, mut rhs) = assembler.assemble_to_global();
+    let mut rhs = assembler.assemble_rhs();
 
     // Define the specific conditions for this run
     let (left_bc, right_bc) = match problem.problem_type {
@@ -102,7 +95,7 @@ fn main() {
         }
     };
 
-    assembler.apply_boundaries(&problem, &left_bc, &right_bc, &mut a, &mut rhs);
+    assembler.apply_boundaries_rhs(&problem, &left_bc, &right_bc, &mut rhs);
                                          
     // solve system (Matrix-Free)
     let op = assembler.matrix_free_op(&problem, &left_bc, &right_bc);

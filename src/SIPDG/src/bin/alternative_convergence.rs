@@ -34,8 +34,8 @@ fn run_study(order: BasisOrder, sizes: &[usize], penalty: f64) -> Vec<(usize, f6
         let left_bc = DirichletBC { value: 1.0 };
         let right_bc = NeumannBC { value: 0.0 };
         
-        let (mut mat, mut global_rhs) = assembler.assemble_to_global();
-        assembler.apply_boundaries(&prob, &left_bc, &right_bc, &mut mat, &mut global_rhs);
+        let mut global_rhs = assembler.assemble_rhs();
+        assembler.apply_boundaries_rhs(&prob, &left_bc, &right_bc, &mut global_rhs);
 
         let op = assembler.matrix_free_op(&prob, &left_bc, &right_bc);
         let p = cg(&op, &global_rhs, 1e-12, 20000);

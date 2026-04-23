@@ -25,6 +25,12 @@ pub fn load_problem_from_file(path: &Path) -> ConfigurableProblem {
                         _ => ProblemType::Constant,
                     };
                 }
+                "order" | "degree" => {
+                    prob.order = match parts[1].to_lowercase().as_str() {
+                        "quadratic" | "2" => crate::pde::BasisOrder::Quadratic,
+                        _ => crate::pde::BasisOrder::Linear,
+                    };
+                }
                 _ => {
                     if let Ok(val) = parts[1].parse::<f64>() {
                         match parts[0] {

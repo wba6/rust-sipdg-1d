@@ -25,7 +25,7 @@ mod tests {
         assembler.assemble_interfaces(&TestProb);
 
         let (a, rhs) = assembler.assemble_to_global();
-        let n = a.rows();
+        let n = rhs.cols();
 
         // 1. Check Symmetry
         for i in 0..n {

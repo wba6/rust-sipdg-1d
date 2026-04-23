@@ -96,6 +96,64 @@ impl<T> IndexMut<(usize, usize)> for Matrix<T> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymmetricMatrix<T> {
+    n: usize,
+    data: Vec<T>,
+}
+
+impl<T> SymmetricMatrix<T> {
+    pub fn new(n: usize, value: T) -> Self
+    where
+        T: Clone,
+    {
+        let len = n * (n + 1) / 2;
+        Self {
+            n,
+            data: vec![value; len],
+        }
+    }
+
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    fn packed_index(&self, r: usize, c: usize) -> usize {
+        debug_assert!(r < self.n && c < self.n, "Index out of bounds");
+        let (r, c) = if r <= c { (r, c) } else { (c, r) };
+        // Row-major upper triangle index: r*n - r*(r-1)/2 + (c-r)
+        // Wait, simpler for upper triangle (row-major):
+        // r=0: 0, 1, 2, ..., n-1 (n elements)
+        // r=1:    n, n+1, ..., 2n-2 (n-1 elements)
+        // The index for (r, c) where r <= c is:
+        // Sum_{i=0}^{r-1} (n - i) + (c - r)
+        // = r*n - r*(r-1)/2 + c - r
+        r * self.n - r * (r + 1) / 2 + c
+    }
+
+    pub fn get(&self, r: usize, c: usize) -> &T {
+        &self.data[self.packed_index(r, c)]
+    }
+
+    pub fn get_mut(&mut self, r: usize, c: usize) -> &mut T {
+        let i = self.packed_index(r, c);
+        &mut self.data[i]
+    }
+}
+
+impl<T> Index<(usize, usize)> for SymmetricMatrix<T> {
+    type Output = T;
+    fn index(&self, (r, c): (usize, usize)) -> &Self::Output {
+        self.get(r, c)
+    }
+}
+
+impl<T> IndexMut<(usize, usize)> for SymmetricMatrix<T> {
+    fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut Self::Output {
+        self.get_mut(r, c)
+    }
+}
+
 impl<T> Mul<&T> for &Matrix<T>
 where
     T: Clone + Default + Mul<Output = T>,

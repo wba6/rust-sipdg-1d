@@ -26,8 +26,8 @@ fn run_study(order: BasisOrder, sizes: &[usize], penalty: f64) -> Vec<(usize, f6
         assembler.assemble_interfaces(&prob);
 
         let bc = DirichletBC { value: 0.0 };
-        let (mut mat, mut global_rhs) = assembler.assemble_to_global();
-        assembler.apply_boundaries(&prob, &bc, &bc, &mut mat, &mut global_rhs);
+        let mut global_rhs = assembler.assemble_rhs();
+        assembler.apply_boundaries_rhs(&prob, &bc, &bc, &mut global_rhs);
 
         let op = assembler.matrix_free_op(&prob, &bc, &bc);
         let p = cg(&op, &global_rhs, 1e-12, 20000);

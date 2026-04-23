@@ -8,3 +8,4 @@ q = 1.0
 f = 1.0
 num_elements = 10
 sigma_0 = 10.0
+degree = 2

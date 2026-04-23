@@ -24,10 +24,10 @@ mod tests {
         assembler.assemble_volume(&SimpleProb);
         assembler.assemble_interfaces(&SimpleProb);
 
-        let (a, _) = assembler.assemble_to_global();
+        let (a, rhs) = assembler.assemble_to_global();
 
         // Check symmetry: A[i, j] == A[j, i]
-        let n = a.rows();
+        let n = rhs.cols();
         let tol = 1e-12;
         for i in 0..n {
             for j in 0..n {
@@ -48,9 +48,9 @@ mod tests {
         assembler.assemble_volume(&SimpleProb);
         assembler.assemble_interfaces(&SimpleProb);
 
-        let (a, _) = assembler.assemble_to_global();
+        let (a, rhs) = assembler.assemble_to_global();
 
-        let n = a.rows();
+        let n = rhs.cols();
         for i in 0..n {
             assert!(a[(i, i)] > 0.0, "Diagonal entry A[{}, {}] is not positive: {}", i, i, a[(i, i)]);
         }
