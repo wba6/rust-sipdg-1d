@@ -1,6 +1,41 @@
 #[cfg(test)]
 pub mod tests {
-    use util::matrix::Matrix;
+    use util::matrix::{Matrix, SymmetricMatrix};
+
+    #[test]
+    fn symmetric_matrix_indexing() {
+        let mut m = SymmetricMatrix::new(3, 0.0);
+        m[(0, 1)] = 5.0;
+        assert_eq!(m[(0, 1)], 5.0);
+        assert_eq!(m[(1, 0)], 5.0); // Symmetry check
+
+        m[(2, 0)] = 10.0;
+        assert_eq!(m[(0, 2)], 10.0);
+        assert_eq!(m[(2, 0)], 10.0);
+
+        m[(1, 1)] = 7.0;
+        assert_eq!(m[(1, 1)], 7.0);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "Index out of bounds")]
+    fn symmetric_matrix_out_of_bounds() {
+        let m = SymmetricMatrix::new(2, 0.0);
+        let _ = m[(2, 0)];
+    }
+
+    #[test]
+    fn symmetric_matrix_packed_size() {
+        let m = SymmetricMatrix::new(4, 0.0);
+        // Size should be 4*(4+1)/2 = 10
+        // We can't easily check data.len() as it is private, but we can verify all indices
+        for i in 0..4 {
+            for j in 0..4 {
+                let _ = m[(i, j)];
+            }
+        }
+    }
 
     #[test]
     fn new_fills_with_value_row_major_len() {

@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use crate::pde::ConfigurableProblem;
+use crate::pde::{ConfigurableProblem, ProblemType};
 
 pub fn load_problem_from_file(path: &Path) -> ConfigurableProblem {
     let mut prob = ConfigurableProblem::default();
@@ -17,14 +17,31 @@ pub fn load_problem_from_file(path: &Path) -> ConfigurableProblem {
         let parts: Vec<&str> = line.split('=').map(|s| s.trim()).collect();
         
         if parts.len() == 2 {
-            if let Ok(val) = parts[1].parse::<f64>() {
-                match parts[0] {
-                    "a" | "p" => prob.a_val = val,
-                    "q" => prob.q_val = val,
-                    "f" => prob.f_val = val,
-                    "num_elements" => prob.num_elements = val as usize,
-                    "sigma_0" | "penalty" => prob.sigma_0 = val,
-                    _ => println!("Warning: Unknown parameter {}", parts[0]),
+            match parts[0] {
+                "problem" => {
+                    prob.problem_type = match parts[1].to_lowercase().as_str() {
+                        "sine" => ProblemType::Sine,
+                        "cosine" => ProblemType::Cosine,
+                        _ => ProblemType::Constant,
+                    };
+                }
+                "order" | "degree" => {
+                    prob.order = match parts[1].to_lowercase().as_str() {
+                        "quadratic" | "2" => crate::pde::BasisOrder::Quadratic,
+                        _ => crate::pde::BasisOrder::Linear,
+                    };
+                }
+                _ => {
+                    if let Ok(val) = parts[1].parse::<f64>() {
+                        match parts[0] {
+                            "a" | "p" => prob.a_val = val,
+                            "q" => prob.q_val = val,
+                            "f" => prob.f_val = val,
+                            "num_elements" => prob.num_elements = val as usize,
+                            "sigma_0" | "penalty" => prob.sigma_0 = val,
+                            _ => println!("Warning: Unknown parameter {}", parts[0]),
+                        }
+                    }
                 }
             }
         }

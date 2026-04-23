@@ -1,10 +1,11 @@
 # Sturm-Liouville Problem Parameters
 # -(a*p')' + q*p = f
-# Default SL problem: a=1, q=1, f=(pi^2 + 1)sin(pi*x)
-# Exact solution: p(x) = sin(pi*x)
+# General constant coefficients or named problems (e.g., problem = sine, cosine)
 
-p = 1.0
+problem = cosine
+a = 1.0
 q = 1.0
 f = 1.0
 num_elements = 10
 sigma_0 = 10.0
+degree = 2
