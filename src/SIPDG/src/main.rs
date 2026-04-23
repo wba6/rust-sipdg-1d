@@ -34,15 +34,32 @@ fn main() {
     // Abstracted loading
     let problem = load_problem_from_file(&args.path);
     
-    // Default solution for the full SL problem default: a=1, q=1, f=(pi^2+1)sin(pi*x)
-    let is_sl_default = problem.a_val == 1.0 && problem.q_val == 1.0 && problem.f_val == 1.0;
-    
-    let soln_function: Box<dyn Fn(f64) -> f64 + Send + Sync> = if is_sl_default {
-        println!("Using SL Default Exact Solution: sin(pi * x)");
-        Box::new(|x: f64| (std::f64::consts::PI * x).sin())
-    } else {
-        println!("Using Poisson Exact Solution: x*(1-x)/2");
-        Box::new(|x: f64| (x * (1.0 - x)) / 2.0)
+    // Exact solution for the problem: - (a p')' + q p = f 
+    let soln_function: Box<dyn Fn(f64) -> f64 + Send + Sync> = match problem.problem_type {
+        ProblemType::Sine => {
+            println!("Using SL Sine Exact Solution: sin(pi * x)");
+            Box::new(|x: f64| (std::f64::consts::PI * x).sin())
+        }
+        ProblemType::Cosine => {
+            println!("Using SL Cosine Exact Solution: cos(pi * x)");
+            Box::new(|x: f64| (std::f64::consts::PI * x).cos())
+        }
+        ProblemType::Constant => {
+            let a_val = problem.a_val;
+            let q_val = problem.q_val;
+            let f_val = problem.f_val;
+
+            if q_val > 0.0 {
+                println!("Using General SL Exact Solution (q > 0)");
+                let sqrt_qa = (q_val / a_val).sqrt();
+                Box::new(move |x: f64| {
+                    (f_val / q_val) * (1.0 - (sqrt_qa * (x - 0.5)).cosh() / (0.5 * sqrt_qa).cosh())
+                })
+            } else {
+                println!("Using Poisson Exact Solution (q = 0)");
+                Box::new(move |x: f64| (f_val / a_val) * (x * (1.0 - x)) / 2.0)
+            }
+        }
     };
     
     println!("Loaded Parameters: a={}, q={}, f={}, num_elements={}, sigma_0={}", 
@@ -74,8 +91,16 @@ fn main() {
     let (mut a, mut rhs) = assembler.assemble_to_global();
 
     // Define the specific conditions for this run
-    let left_bc = DirichletBC { value: 0.0 };  // u(0) = 0
-    let right_bc = DirichletBC { value: 0.0 }; // u(1) = 0
+    let (left_bc, right_bc) = match problem.problem_type {
+        ProblemType::Cosine => {
+            // p(0) = 1 (Dirichlet), p'(1) = 0 (Neumann)
+            (BCType::Dirichlet(DirichletBC { value: 1.0 }), BCType::Neumann(NeumannBC { value: 0.0 }))
+        }
+        _ => {
+            // Default: Homogeneous Dirichlet p(0) = 0, p(1) = 0
+            (BCType::Dirichlet(DirichletBC { value: 0.0 }), BCType::Dirichlet(DirichletBC { value: 0.0 }))
+        }
+    };
 
     assembler.apply_boundaries(&problem, &left_bc, &right_bc, &mut a, &mut rhs);
                                          

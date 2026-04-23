@@ -127,12 +127,20 @@ pub trait PdeProblem: Sync {
     fn f(&self, x: f64) -> f64;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProblemType {
+    Constant,
+    Sine,
+    Cosine,
+}
+
 pub struct ConfigurableProblem {
     pub a_val: f64,
     pub q_val: f64,
     pub f_val: f64,
     pub num_elements: usize,
     pub sigma_0: f64,
+    pub problem_type: ProblemType,
 }
 
 impl Default for ConfigurableProblem {
@@ -140,9 +148,10 @@ impl Default for ConfigurableProblem {
         Self { 
             a_val: 1.0, 
             q_val: 1.0, 
-            f_val: 1.0, // Use 1.0 as a flag for default non-constant f(x) or just a constant
+            f_val: 1.0,
             num_elements: 3000,
             sigma_0: 20.0,
+            problem_type: ProblemType::Constant,
         }
     }
 }
@@ -151,12 +160,16 @@ impl PdeProblem for ConfigurableProblem {
     fn a(&self, _x: f64) -> f64 { self.a_val }
     fn q(&self, _x: f64) -> f64 { self.q_val }
     fn f(&self, x: f64) -> f64 { 
-        // If q=1, a=1 and f=1, we assume the user wants the "full" SL default: (pi^2 + 1) * sin(pi * x)
-        if self.a_val == 1.0 && self.q_val == 1.0 && self.f_val == 1.0 {
-            use std::f64::consts::PI;
-            (PI.powi(2) + 1.0) * (PI * x).sin()
-        } else {
-            self.f_val 
+        match self.problem_type {
+            ProblemType::Sine => {
+                use std::f64::consts::PI;
+                (PI.powi(2) + 1.0) * (PI * x).sin()
+            }
+            ProblemType::Cosine => {
+                use std::f64::consts::PI;
+                (PI.powi(2) + 1.0) * (PI * x).cos()
+            }
+            ProblemType::Constant => self.f_val,
         }
     }
 }
@@ -248,8 +261,8 @@ impl BoundaryCondition for DirichletBC {
             // RHS F contributions
             match side {
                 Side::Left => {
-                    // + v'(x0) g1 - (sigma/h) g1 v(x0)
-                    f_global[(0, row_idx)] += self.value * (a_val * dvi_dx - pen * vi);
+                    // + v'(x0) g1 + (sigma/h) g1 v(x0)
+                    f_global[(0, row_idx)] += self.value * (a_val * dvi_dx + pen * vi);
                 }
                 Side::Right => {
                     // - v'(xN) g2 + (sigma/h) g2 v(xN)
@@ -309,7 +322,6 @@ impl BoundaryCondition for DirichletBC {
 
 /// Neumann Boundary Condition: a(x) p'(x) = value
 /// Formulation follows PDF Equation (27)
-#[allow(dead_code)]
 pub struct NeumannBC { pub value: f64 }
 
 impl BoundaryCondition for NeumannBC {
@@ -355,6 +367,44 @@ impl BoundaryCondition for NeumannBC {
         _v_out: &mut [f64],
     ) {
         // Neumann BC only affects RHS, not the operator A
+    }
+}
+
+/// Combined Boundary Condition type to support static dispatch or dyn-compatibility workarounds
+pub enum BCType {
+    Dirichlet(DirichletBC),
+    Neumann(NeumannBC),
+}
+
+impl BoundaryCondition for BCType {
+    fn apply(
+        &self,
+        side: Side,
+        elem_idx: usize,
+        assembler: &SipdgAssembler,
+        prob: &impl PdeProblem,
+        a_global: &mut Matrix<f64>,
+        f_global: &mut Matrix<f64>,
+    ) {
+        match self {
+            BCType::Dirichlet(bc) => bc.apply(side, elem_idx, assembler, prob, a_global, f_global),
+            BCType::Neumann(bc) => bc.apply(side, elem_idx, assembler, prob, a_global, f_global),
+        }
+    }
+
+    fn apply_matrix_free(
+        &self,
+        side: Side,
+        elem_idx: usize,
+        assembler: &SipdgAssembler,
+        prob: &impl PdeProblem,
+        v_in: &[f64],
+        v_out: &mut [f64],
+    ) {
+        match self {
+            BCType::Dirichlet(bc) => bc.apply_matrix_free(side, elem_idx, assembler, prob, v_in, v_out),
+            BCType::Neumann(bc) => bc.apply_matrix_free(side, elem_idx, assembler, prob, v_in, v_out),
+        }
     }
 }
 

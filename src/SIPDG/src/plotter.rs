@@ -36,23 +36,26 @@ pub fn plot_results(
     root.fill(&WHITE)?;
 
     // Calculate scaling limits based on both exact and numerical data
-    let exact_max = (0..100)
+    let (exact_min, exact_max) = (0..100)
         .map(|i| soln_function(i as f64 / 100.0))
-        .fold(0.0, f64::max);
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), val| (min.min(val), max.max(val)));
     
-    let numerical_max = u.iter()
+    let (numerical_min, numerical_max) = u.iter()
         .filter(|&&val| !val.is_nan() && !val.is_infinite())
-        .fold(0.0, |a: f64, &b| a.max(b));
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), &val| (min.min(val), max.max(val)));
 
-    // Use a buffer for the Y-axis height
-    let y_limit = exact_max.max(numerical_max) * 1.2;
+    let y_min = exact_min.min(numerical_min);
+    let y_max = exact_max.max(numerical_max);
+    let y_buffer = (y_max - y_min).abs() * 0.2;
+    let y_limit_min = y_min - y_buffer;
+    let y_limit_max = y_max + y_buffer;
 
     let mut chart = ChartBuilder::on(&root)
         .caption("1D SIPDG Solver Results", ("sans-serif", 30).into_font())
         .margin(10)
         .x_label_area_size(40)
         .y_label_area_size(50)
-        .build_cartesian_2d(0.0..1.0, 0.0..y_limit)?;
+        .build_cartesian_2d(0.0..1.0, y_limit_min..y_limit_max)?;
 
     chart.configure_mesh()
         .x_desc("x")
