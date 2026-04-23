@@ -38,15 +38,6 @@ fn main() {
         let (_, rhs) = assembler.assemble_to_global(); // This part is serial but fast
         let _ = cg(&op, &rhs, 1e-10, 10000);
         let parallel_time = start_p.elapsed().as_millis();
-
-        // Serial (using RAYON_NUM_THREADS=1 via env if possible, or just re-running in a way that forces serial)
-        // Actually, Rayon doesn't have a simple "switch to serial" at runtime easily without rebuilding the pool.
-        // But we can simulate it by setting the environment variable before running.
-        // Instead, let's just report the Parallel results and I'll run it once with RAYON_NUM_THREADS=1 separately if needed.
-        // Alternatively, I can use a small hack: Rayon par_iter can be replaced by iter.
-        // But that requires code changes.
-        
-        // Let's just gather Parallel results for now and I'll manually compare with some serial runs.
         println!("{}, {}, -, {}, -", n, actual_dofs, parallel_time);
     }
 }

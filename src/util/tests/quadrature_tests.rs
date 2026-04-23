@@ -1,5 +1,4 @@
 // src/util/tests/quadrature_tests.rs
-// Undergraduate-style tests for numerical integration (Quadrature).
 // We check if the Gauss-Legendre rules can integrate polynomials exactly.
 
 #[cfg(test)]

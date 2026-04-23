@@ -1,5 +1,4 @@
 // src/SIPDG/tests/symmetry_tests.rs
-// Undergraduate-style tests to verify the properties of the assembled system matrix.
 // For the SIPDG method, the matrix should be symmetric if we use the symmetric version of the flux.
 
 #[cfg(test)]

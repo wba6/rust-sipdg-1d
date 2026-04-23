@@ -1,5 +1,4 @@
 // src/SIPDG/tests/mesh_tests.rs
-// Undergraduate-style tests for the 1D DG mesh generator.
 // We verify that the mesh correctly places nodes and elements.
 
 #[cfg(test)]

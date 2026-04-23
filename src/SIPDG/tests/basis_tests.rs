@@ -1,5 +1,4 @@
 // src/SIPDG/tests/basis_tests.rs
-// Undergraduate-style tests for Finite Element basis functions.
 // We verify properties like Kronecker delta and Partition of Unity.
 
 #[cfg(test)]
