@@ -26,3 +26,37 @@ This repo is the code component of an Honors project (Spring 2026) focused on cl
 - Sturm–Liouville elliptic operator (Poisson as a special case)
 - Boundary conditions drawn from **Robin-type** (Dirichlet/Neumann as special cases)
 
+---
+
+## Getting Started
+
+### Installation
+
+You need the Rust toolchain installed. The easiest way is via `rustup`:
+
+- **Linux/macOS:**
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
+- **Windows:**
+  Download and run [rustup-init.exe](https://rustup.rs/).
+
+After installation, ensure your PATH is updated (usually handled by the installer or by restarting your terminal).
+
+### Running the Project
+
+This project uses a Rust workspace. You can run the main solver or specific studies using `cargo`:
+
+**Main Solver:**
+```bash
+cargo run -p sipdg
+```
+
+### Testing
+
+Run the test suite across all workspace members:
+
+```bash
+cargo test
+```
+
